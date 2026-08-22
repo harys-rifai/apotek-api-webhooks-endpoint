@@ -5,85 +5,148 @@
 {% block content %}
 <div class="card">
   <div class="card__header">
-    <h2 class="card__title">Daftar API Endpoints</h2>
-  </div>
-  <div class="card__body">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Nama</th>
-          <th>Method</th>
-          <th>Path</th>
-          <th>Module</th>
-          <th>Total</th>
-          <th>Success</th>
-          <th>Fail</th>
-          <th>Status</th>
-          <th>Aksi</th>
-        </tr>
-      </thead>
-      <tbody>
+    <h2 class="card__title"><i class="fa-solid fa-plug" style="color:var(--neon-cyan)"></i> API Endpoints</h2>
+    <div class="card__actions">
+      <input type="text" id="epSearch" class="select-sm" placeholder="🔍 Cari path / nama…" style="width:180px">
+      <select id="epModuleFilter" class="select-sm">
+        <option value="">Semua Module</option>
         {% for ep in endpoints %}
-        <tr>
-          <td>{{ forloop.counter }}</td>
-          <td>{{ ep.name }}</td>
-          <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
-          <td class="text-mono text-sm">{{ ep.path }}</td>
-          <td><span class="badge badge--module">{{ ep.module }}</span></td>
-          <td>{{ ep.total }}</td>
-          <td class="text-success">{{ ep.success }}</td>
-          <td class="text-warn">{{ ep.fail }}</td>
-          <td>
-            {% if ep.is_active %}
-              <span class="badge badge--success">Aktif</span>
-            {% else %}
-              <span class="badge badge--muted">Nonaktif</span>
-            {% endif %}
-          </td>
-          <td class="actions-cell">
-            <a href="{% url 'endpoint_detail' ep.pk %}" class="btn btn--sm btn--secondary">Detail</a>
-            <button class="btn btn--sm btn--primary ping-btn" data-id="{{ ep.pk }}" data-path="{{ ep.path }}">
-              Ping
-            </button>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="10" class="text-center text-muted" style="padding:2rem">
-            Belum ada endpoint. Tambahkan melalui <a href="/admin/">Django Admin</a>.
-          </td>
-        </tr>
+        <option value="{{ ep.module }}">{{ ep.module }}</option>
         {% endfor %}
-      </tbody>
-    </table>
+      </select>
+    </div>
+  </div>
+  <div class="card__body" style="padding:0">
+    <div class="table-wrapper">
+      <table class="table table--compact">
+        <thead><tr>
+          <th>#</th><th>Nama</th><th>Method</th><th>Path</th>
+          <th>Module</th><th>Total</th><th>Success</th><th>Fail</th><th>Status</th><th>Aksi</th>
+        </tr></thead>
+        <tbody id="epTbody">
+          {% for ep in endpoints %}
+          <tr class="ep-row"
+              data-name="{{ ep.name|lower }}"
+              data-path="{{ ep.path|lower }}"
+              data-module="{{ ep.module }}">
+            <td class="text-muted" style="font-size:.75rem">{{ forloop.counter }}</td>
+            <td style="font-size:.82rem;font-weight:600">{{ ep.name }}</td>
+            <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
+            <td class="text-mono" style="font-size:.78rem">{{ ep.path }}</td>
+            <td><span class="badge badge--module">{{ ep.module }}</span></td>
+            <td>{{ ep.total }}</td>
+            <td class="text-success">{{ ep.success }}</td>
+            <td class="text-warn">{{ ep.fail }}</td>
+            <td>
+              {% if ep.is_active %}
+                <span class="badge badge-info">Aktif</span>
+              {% else %}
+                <span class="badge badge-muted">Nonaktif</span>
+              {% endif %}
+            </td>
+            <td class="actions-cell">
+              <a href="{% url 'endpoint_detail' ep.pk %}" class="btn btn--sm btn--secondary">Detail</a>
+              <button class="btn btn--sm btn--primary ping-btn"
+                      data-id="{{ ep.pk }}" data-path="{{ ep.path }}">Ping</button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="10" class="text-center text-muted" style="padding:2rem">
+            Belum ada endpoint. <a href="/admin/">Tambah via Admin</a>.
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-bar" id="epPager">
+      <span class="page-info" id="epInfo"></span>
+      <div class="page-actions">
+        <span class="page-size-label">Rows:</span>
+        <select id="epPageSize" class="select-sm">
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+        <button class="btn btn-outline btn-sm" id="epPrev">‹ Prev</button>
+        <button class="btn btn-outline btn-sm" id="epNext">Next ›</button>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- Ping result toast -->
-<div class="toast" id="pingToast" style="display:none"></div>
+<!-- Toast -->
+<div class="toast-container" id="epToastContainer" style="position:fixed;bottom:24px;right:24px;z-index:300"></div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// ── Dedup module options ──
+const moduleSelect = document.getElementById("epModuleFilter");
+const seen = new Set();
+[...moduleSelect.options].forEach(o => {
+  if (seen.has(o.value)) o.remove();
+  else seen.add(o.value);
+});
+
+// ── Pagination state ──
+let _epPage = 1, _epPageSize = 10, _epQuery = "", _epModule = "";
+
+function visibleRows() {
+  return [...document.querySelectorAll(".ep-row")].filter(r => {
+    const matchQ = !_epQuery || r.dataset.name.includes(_epQuery) || r.dataset.path.includes(_epQuery);
+    const matchM = !_epModule || r.dataset.module === _epModule;
+    return matchQ && matchM;
+  });
+}
+
+function renderEpPagination() {
+  const rows  = visibleRows();
+  const total = rows.length;
+  const pages = Math.ceil(total / _epPageSize) || 1;
+  _epPage     = Math.max(1, Math.min(_epPage, pages));
+  const start = (_epPage - 1) * _epPageSize;
+
+  // hide all then show slice
+  document.querySelectorAll(".ep-row").forEach(r => r.style.display = "none");
+  rows.slice(start, start + _epPageSize).forEach(r => r.style.display = "");
+
+  document.getElementById("epInfo").textContent =
+    total ? `${start+1}–${Math.min(start+_epPageSize, total)} dari ${total}` : "0 hasil";
+  document.getElementById("epPrev").disabled = _epPage <= 1;
+  document.getElementById("epNext").disabled = _epPage >= pages;
+}
+
+document.getElementById("epPrev").addEventListener("click",     () => { _epPage--; renderEpPagination(); });
+document.getElementById("epNext").addEventListener("click",     () => { _epPage++; renderEpPagination(); });
+document.getElementById("epPageSize").addEventListener("change", e => { _epPageSize = +e.target.value; _epPage = 1; renderEpPagination(); });
+document.getElementById("epSearch").addEventListener("input",    e => { _epQuery = e.target.value.toLowerCase().trim(); _epPage = 1; renderEpPagination(); });
+document.getElementById("epModuleFilter").addEventListener("change", e => { _epModule = e.target.value; _epPage = 1; renderEpPagination(); });
+
+renderEpPagination();
+
+// ── Ping ──
+function showEpToast(msg, type) {
+  const c = document.getElementById("epToastContainer");
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = "0"; setTimeout(() => t.remove(), 400); }, 4000);
+}
+
 document.querySelectorAll(".ping-btn").forEach(btn => {
   btn.addEventListener("click", async () => {
-    const id = btn.dataset.id;
-    const path = btn.dataset.path;
-    btn.disabled = true;
-    btn.textContent = "Pinging…";
+    btn.disabled = true; btn.textContent = "…";
     try {
-      const res = await fetch(`/api/ping/${id}/`);
+      const res  = await fetch(`/api/ping/${btn.dataset.id}/`);
       const data = await res.json();
-      const toast = document.getElementById("pingToast");
-      const ok = data.status === "success";
-      toast.className = `toast toast--${ok ? "success" : "error"}`;
-      toast.textContent = `[${data.status_code || "ERR"}] ${path} — ${data.response_time_ms} ms — ${data.status}`;
-      toast.style.display = "block";
-      setTimeout(() => { toast.style.display = "none"; }, 4000);
+      const ok   = data.status === "success";
+      showEpToast(`[${data.status_code || "ERR"}] ${btn.dataset.path} — ${data.response_time_ms}ms — ${data.status}`,
+                  ok ? "success" : "error");
     } finally {
-      btn.disabled = false;
-      btn.textContent = "Ping";
+      btn.disabled = false; btn.textContent = "Ping";
     }
   });
 });

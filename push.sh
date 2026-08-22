@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-REMOTE_URL="https://github.com/harys-rifai/ApotekMonitor.git"
+REMOTE_URL="https://github.com/harys-rifai/apotek-api-webhooks-endpoint.git"
 BRANCH="main"
 
 # Init git jika belum ada
@@ -34,7 +34,7 @@ EOF
 fi
 
 echo "Staging semua perubahan..."
-git add -A
+git add apps/ config/ templates/ static/ manage.py requirements.txt run.sh push.sh .env.example .gitignore
 
 echo "Committing..."
 COMMIT_MSG="Deploy $(date '+%Y-%m-%d %H:%M:%S')"
@@ -54,6 +54,6 @@ git push -u origin "$BRANCH" --force
 echo ""
 echo "=============================="
 echo "  Push selesai!"
-echo "  Repo : $REMOTE_URL"
+echo "  Repo  : $REMOTE_URL"
 echo "  Branch: $BRANCH"
 echo "=============================="

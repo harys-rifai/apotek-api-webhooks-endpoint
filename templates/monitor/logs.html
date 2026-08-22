@@ -5,9 +5,9 @@
 {% block content %}
 <div class="card">
   <div class="card__header">
-    <h2 class="card__title">Request Logs</h2>
+    <h2 class="card__title"><i class="fa-solid fa-list-ul" style="color:var(--neon-cyan)"></i> Request Logs</h2>
     <div class="card__actions">
-      <form method="get" style="display:flex;gap:.5rem;align-items:center">
+      <form method="get" id="logFilterForm" style="display:flex;gap:6px;align-items:center">
         <select name="status" class="select-sm" onchange="this.form.submit()">
           <option value="">Semua Status</option>
           <option value="success" {% if status_filter == "success" %}selected{% endif %}>Success</option>
@@ -22,50 +22,101 @@
           <option value="PATCH"  {% if method_filter == "PATCH"  %}selected{% endif %}>PATCH</option>
           <option value="DELETE" {% if method_filter == "DELETE" %}selected{% endif %}>DELETE</option>
         </select>
+        <input type="text" name="q" value="{{ request.GET.q }}"
+               class="select-sm" placeholder="🔍 Path…" style="width:140px">
+        <button type="submit" class="btn btn--sm btn--primary">Filter</button>
       </form>
     </div>
   </div>
+
   <div class="card__body" style="padding:0">
-    <table class="table table--compact">
-      <thead>
-        <tr>
-          <th>Waktu</th>
-          <th>Method</th>
-          <th>Path</th>
-          <th>Status Code</th>
-          <th>Status</th>
-          <th>Latency</th>
-          <th>Retry</th>
-          <th>Triggered By</th>
-          <th>Error</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in logs %}
-        <tr>
-          <td class="text-muted text-sm" style="white-space:nowrap">{{ log.created_at|date:"d/m H:i:s" }}</td>
-          <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
-          <td class="text-mono text-sm">{{ log.path }}</td>
-          <td>
-            <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge--success{% elif log.status_code >= 400 and log.status_code < 500 %}badge--warn{% elif log.status_code %}badge--error{% else %}badge--muted{% endif %}">
-              {{ log.status_code|default:"—" }}
-            </span>
-          </td>
-          <td><span class="status-dot status-dot--{{ log.status }}"></span>{{ log.status }}</td>
-          <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}" style="white-space:nowrap">
-            {{ log.response_time_ms|floatformat:0|default:"—" }} ms
-          </td>
-          <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}</td>
-          <td class="text-muted">{{ log.triggered_by }}</td>
-          <td class="text-danger text-sm" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.error_message }}">
-            {{ log.error_message|truncatechars:40 }}
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="9" class="text-center text-muted" style="padding:2rem">Tidak ada log ditemukan.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrapper">
+      <table class="table table--compact">
+        <thead><tr>
+          <th>Waktu</th><th>Method</th><th>Path</th>
+          <th>Code</th><th>Status</th><th>Latency</th>
+          <th>Retry</th><th>By</th><th>Error</th>
+        </tr></thead>
+        <tbody>
+          {% for log in logs %}
+          <tr class="log-row">
+            <td class="text-muted" style="white-space:nowrap;font-size:.76rem">{{ log.created_at|date:"d/m H:i:s" }}</td>
+            <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
+            <td class="text-mono" style="font-size:.76rem">{{ log.path }}</td>
+            <td>
+              <span class="badge
+                {% if log.status_code >= 200 and log.status_code < 300 %}badge-success
+                {% elif log.status_code >= 400 and log.status_code < 500 %}badge-warning
+                {% elif log.status_code %}badge-danger
+                {% else %}badge-muted{% endif %}">
+                {{ log.status_code|default:"—" }}
+              </span>
+            </td>
+            <td><span class="status-dot status-dot--{{ log.status }}"></span>{{ log.status }}</td>
+            <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}"
+                style="white-space:nowrap;font-size:.76rem">
+              {{ log.response_time_ms|floatformat:0|default:"—" }} ms
+            </td>
+            <td class="{% if log.attempt > 1 %}text-warn{% endif %}" style="font-size:.76rem">
+              {{ log.attempt }}
+            </td>
+            <td class="text-muted" style="font-size:.74rem">{{ log.triggered_by }}</td>
+            <td class="text-danger" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.74rem"
+                title="{{ log.error_message }}">
+              {{ log.error_message|truncatechars:35 }}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" class="text-center text-muted" style="padding:2rem">Tidak ada log ditemukan.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination bar -->
+    <div class="pagination-bar" id="logsPager">
+      <span class="page-info" id="logsInfo"></span>
+      <div class="page-actions">
+        <span class="page-size-label">Rows:</span>
+        <select id="logsPageSize" class="select-sm">
+          <option value="15" selected>15</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button class="btn btn-outline btn-sm" id="logsPrev">‹ Prev</button>
+        <button class="btn btn-outline btn-sm" id="logsNext">Next ›</button>
+      </div>
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let _logsPage = 1, _logsPageSize = 15;
+const rows = () => [...document.querySelectorAll(".log-row")];
+
+function renderLogs() {
+  const all   = rows();
+  const total = all.length;
+  if (total === 0) return;
+  const pages = Math.ceil(total / _logsPageSize);
+  _logsPage   = Math.max(1, Math.min(_logsPage, pages));
+  const start = (_logsPage - 1) * _logsPageSize;
+
+  all.forEach((r, i) => r.style.display = (i >= start && i < start + _logsPageSize) ? "" : "none");
+
+  document.getElementById("logsInfo").textContent =
+    `${start+1}–${Math.min(start+_logsPageSize, total)} dari ${total}`;
+  document.getElementById("logsPrev").disabled = _logsPage <= 1;
+  document.getElementById("logsNext").disabled = _logsPage >= pages;
+}
+
+document.getElementById("logsPrev").addEventListener("click",    () => { _logsPage--; renderLogs(); });
+document.getElementById("logsNext").addEventListener("click",    () => { _logsPage++; renderLogs(); });
+document.getElementById("logsPageSize").addEventListener("change", e => { _logsPageSize = +e.target.value; _logsPage = 1; renderLogs(); });
+
+renderLogs();
+</script>
 {% endblock %}

@@ -108,12 +108,15 @@ def _stats_for_period_for_endpoint(ep, days=7):
 def log_list(request):
     status_filter = request.GET.get("status", "")
     method_filter = request.GET.get("method", "")
+    q_filter      = request.GET.get("q", "").strip()
     logs = APIRequestLog.objects.select_related("endpoint").order_by("-created_at")
     if status_filter:
         logs = logs.filter(status=status_filter)
     if method_filter:
         logs = logs.filter(method=method_filter)
-    logs = logs[:200]
+    if q_filter:
+        logs = logs.filter(path__icontains=q_filter)
+    logs = logs[:500]
     context = {
         "logs": logs,
         "status_filter": status_filter,

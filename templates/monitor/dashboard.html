@@ -3,45 +3,46 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
+
 <!-- KPI Cards -->
 <div class="kpi-grid">
   <div class="kpi-card kpi-card--total">
-    <div class="kpi-card__icon">📡</div>
+    <div class="kpi-card__icon"><i class="fa-solid fa-satellite-dish"></i></div>
     <div class="kpi-card__body">
-      <span class="kpi-card__label">Total Requests (7 hari)</span>
+      <span class="kpi-card__label">Total Requests</span>
       <span class="kpi-card__value">{{ stats.total }}</span>
     </div>
   </div>
   <div class="kpi-card kpi-card--success">
-    <div class="kpi-card__icon">✅</div>
+    <div class="kpi-card__icon"><i class="fa-solid fa-circle-check"></i></div>
     <div class="kpi-card__body">
       <span class="kpi-card__label">Success</span>
       <span class="kpi-card__value">{{ stats.success }}</span>
     </div>
   </div>
   <div class="kpi-card kpi-card--fail">
-    <div class="kpi-card__icon">❌</div>
+    <div class="kpi-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
     <div class="kpi-card__body">
       <span class="kpi-card__label">Fail (4xx)</span>
       <span class="kpi-card__value">{{ stats.fail }}</span>
     </div>
   </div>
   <div class="kpi-card kpi-card--error">
-    <div class="kpi-card__icon">🔥</div>
+    <div class="kpi-card__icon"><i class="fa-solid fa-fire"></i></div>
     <div class="kpi-card__body">
-      <span class="kpi-card__label">Error (5xx/Timeout)</span>
+      <span class="kpi-card__label">Error (5xx)</span>
       <span class="kpi-card__value">{{ stats.error }}</span>
     </div>
   </div>
   <div class="kpi-card kpi-card--rate">
-    <div class="kpi-card__icon">📈</div>
+    <div class="kpi-card__icon"><i class="fa-solid fa-chart-line"></i></div>
     <div class="kpi-card__body">
-      <span class="kpi-card__label">Business Success Rate</span>
+      <span class="kpi-card__label">Success Rate</span>
       <span class="kpi-card__value">{{ stats.success_rate }}%</span>
     </div>
   </div>
   <div class="kpi-card kpi-card--latency">
-    <div class="kpi-card__icon">⏱</div>
+    <div class="kpi-card__icon"><i class="fa-solid fa-stopwatch"></i></div>
     <div class="kpi-card__body">
       <span class="kpi-card__label">Avg Latency</span>
       <span class="kpi-card__value">{{ stats.avg_ms }} ms</span>
@@ -49,11 +50,11 @@
   </div>
 </div>
 
-<!-- Charts Row -->
+<!-- Charts Row — graph & donut diperkecil -->
 <div class="chart-row">
-  <div class="card chart-card">
+  <div class="card">
     <div class="card__header">
-      <h2 class="card__title">Request Volume (7 hari)</h2>
+      <h2 class="card__title"><i class="fa-solid fa-chart-bar" style="color:var(--neon-cyan)"></i> Request Volume</h2>
       <div class="card__actions">
         <select id="chartDaysSelect" class="select-sm">
           <option value="7">7 hari</option>
@@ -62,131 +63,144 @@
         </select>
       </div>
     </div>
-    <div class="card__body">
-      <canvas id="volumeChart" height="100"></canvas>
+    <div class="card__body" style="padding:12px 16px">
+      <canvas id="volumeChart" style="max-height:160px"></canvas>
     </div>
   </div>
 
-  <div class="card chart-card">
+  <div class="card">
     <div class="card__header">
-      <h2 class="card__title">Status Distribution</h2>
+      <h2 class="card__title"><i class="fa-solid fa-chart-pie" style="color:var(--neon-magenta)"></i> Status</h2>
     </div>
-    <div class="card__body chart-donut-wrap">
-      <canvas id="statusChart" height="200"></canvas>
+    <div class="card__body" style="padding:12px 16px;display:flex;justify-content:center;align-items:center">
+      <canvas id="statusChart" style="max-height:160px;max-width:160px"></canvas>
     </div>
   </div>
 </div>
 
-<!-- Latency Chart -->
-<div class="card" style="margin-bottom:1.5rem">
+<!-- Latency Chart diperkecil -->
+<div class="card" style="margin-bottom:16px">
   <div class="card__header">
-    <h2 class="card__title">Avg Latency per Hari (ms)</h2>
+    <h2 class="card__title"><i class="fa-solid fa-wave-square" style="color:var(--neon-purple)"></i> Avg Latency (ms)</h2>
   </div>
-  <div class="card__body">
-    <canvas id="latencyChart" height="80"></canvas>
+  <div class="card__body" style="padding:12px 16px">
+    <canvas id="latencyChart" style="max-height:100px"></canvas>
   </div>
 </div>
 
-<!-- Bottom Row -->
+<!-- Bottom Row tables -->
 <div class="bottom-row">
-  <!-- Top Endpoints Table -->
-  <div class="card table-card">
+  <!-- Top Endpoints -->
+  <div class="card">
     <div class="card__header">
-      <h2 class="card__title">Top 10 Endpoint</h2>
+      <h2 class="card__title">Top Endpoints</h2>
       <a href="{% url 'endpoint_list' %}" class="card__link">Lihat semua →</a>
     </div>
-    <div class="card__body">
-      <table class="table" id="endpointTable">
-        <thead>
-          <tr>
-            <th>Method</th>
-            <th>Path</th>
-            <th>Total</th>
-            <th>Success</th>
-            <th>Fail</th>
-            <th>Avg ms</th>
-            <th>Rate</th>
-          </tr>
-        </thead>
-        <tbody id="endpointTableBody">
-          <tr><td colspan="7" class="text-center text-muted">Loading…</td></tr>
-        </tbody>
-      </table>
+    <div class="card__body" style="padding:0">
+      <div class="table-wrapper">
+        <table class="table table--compact" id="topEpTable">
+          <thead><tr>
+            <th>Method</th><th>Path</th><th>Total</th>
+            <th>Success</th><th>Fail</th><th>Rate</th>
+          </tr></thead>
+          <tbody id="endpointTableBody">
+            <tr><td colspan="6" class="text-center text-muted" style="padding:1.5rem">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination-bar" id="topEpPager" style="display:none">
+        <span class="page-info" id="topEpInfo"></span>
+        <div class="page-actions">
+          <button class="btn btn-outline btn-sm" id="topEpPrev">‹ Prev</button>
+          <button class="btn btn-outline btn-sm" id="topEpNext">Next ›</button>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Slow Endpoints -->
-  <div class="card table-card">
+  <!-- Slowest Endpoints -->
+  <div class="card">
     <div class="card__header">
       <h2 class="card__title">Slowest Endpoints</h2>
     </div>
-    <div class="card__body">
-      <table class="table">
-        <thead>
-          <tr><th>Method</th><th>Path</th><th>Avg ms</th><th>Calls</th></tr>
-        </thead>
-        <tbody>
-          {% for ep in slow_endpoints %}
-          <tr>
-            <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
-            <td class="text-mono">{{ ep.path }}</td>
-            <td class="{% if ep.avg_ms > 2000 %}text-danger{% elif ep.avg_ms > 1000 %}text-warn{% endif %}">
-              {{ ep.avg_ms|floatformat:0 }} ms
-            </td>
-            <td>{{ ep.calls }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="4" class="text-center text-muted">Belum ada data</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="card__body" style="padding:0">
+      <div class="table-wrapper">
+        <table class="table table--compact">
+          <thead><tr><th>Method</th><th>Path</th><th>Avg ms</th><th>Calls</th></tr></thead>
+          <tbody id="slowTbody">
+            {% for ep in slow_endpoints %}
+            <tr>
+              <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
+              <td class="text-mono text-sm">{{ ep.path }}</td>
+              <td class="{% if ep.avg_ms > 2000 %}text-danger{% elif ep.avg_ms > 1000 %}text-warn{% endif %}">
+                {{ ep.avg_ms|floatformat:0 }} ms
+              </td>
+              <td>{{ ep.calls }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="text-center text-muted" style="padding:1.5rem">Belum ada data</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Recent Logs -->
+<!-- Recent Logs dengan pagination -->
 <div class="card">
   <div class="card__header">
     <h2 class="card__title">Recent Requests</h2>
     <a href="{% url 'log_list' %}" class="card__link">Lihat semua →</a>
   </div>
-  <div class="card__body">
-    <table class="table table--compact">
-      <thead>
-        <tr>
-          <th>Waktu</th>
-          <th>Method</th>
-          <th>Path</th>
-          <th>Status Code</th>
-          <th>Status</th>
-          <th>Latency</th>
-          <th>Retry</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in recent_logs %}
-        <tr>
-          <td class="text-muted text-sm">{{ log.created_at|date:"d/m H:i:s" }}</td>
-          <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
-          <td class="text-mono text-sm">{{ log.path }}</td>
-          <td>
-            <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge--success{% elif log.status_code >= 400 and log.status_code < 500 %}badge--warn{% elif log.status_code %}badge--error{% else %}badge--muted{% endif %}">
-              {{ log.status_code|default:"—" }}
-            </span>
-          </td>
-          <td><span class="status-dot status-dot--{{ log.status }}"></span> {{ log.status }}</td>
-          <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}">
-            {{ log.response_time_ms|floatformat:0|default:"—" }} ms
-          </td>
-          <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="7" class="text-center text-muted">Belum ada log. Ping endpoint untuk mulai.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="card__body" style="padding:0">
+    <div class="table-wrapper">
+      <table class="table table--compact">
+        <thead><tr>
+          <th>Waktu</th><th>Method</th><th>Path</th>
+          <th>Code</th><th>Status</th><th>Latency</th><th>Retry</th>
+        </tr></thead>
+        <tbody id="recentLogsTbody">
+          {% for log in recent_logs %}
+          <tr class="log-row">
+            <td class="text-muted" style="white-space:nowrap;font-size:.78rem">{{ log.created_at|date:"d/m H:i:s" }}</td>
+            <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
+            <td class="text-mono" style="font-size:.78rem">{{ log.path }}</td>
+            <td>
+              <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge-success{% elif log.status_code >= 400 and log.status_code < 500 %}badge-warning{% elif log.status_code %}badge-danger{% else %}badge-muted{% endif %}">
+                {{ log.status_code|default:"—" }}
+              </span>
+            </td>
+            <td><span class="status-dot status-dot--{{ log.status }}"></span>{{ log.status }}</td>
+            <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}" style="white-space:nowrap">
+              {{ log.response_time_ms|floatformat:0|default:"—" }} ms
+            </td>
+            <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">
+            Belum ada log. Tambah endpoint lalu klik Ping.
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination-bar" id="recentLogsPager">
+      <span class="page-info" id="recentLogsInfo"></span>
+      <div class="page-actions">
+        <span class="page-size-label">Rows:</span>
+        <select id="recentLogsPageSize" class="select-sm">
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+        <button class="btn btn-outline btn-sm" id="recentLogsPrev">‹</button>
+        <button class="btn btn-outline btn-sm" id="recentLogsNext">›</button>
+      </div>
+    </div>
   </div>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -194,83 +208,149 @@
 const STATS_URL = "{% url 'api_stats_json' %}";
 let volumeChart, statusChart, latencyChart;
 
+// ── Chart.js neon colour palette ──
+Chart.defaults.color = "#9090a8";
+Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
+
 async function loadCharts(days = 7) {
-  const res = await fetch(`${STATS_URL}?days=${days}`);
+  const res  = await fetch(`${STATS_URL}?days=${days}`);
   const json = await res.json();
-  const daily = json.daily;
-  const summary = json.summary;
-  const perEp = json.per_endpoint;
+  const { daily, summary, per_endpoint: perEp } = json;
 
-  const labels = daily.map(d => d.day);
-  const successData = daily.map(d => d.success);
-  const failData = daily.map(d => d.fail);
-  const errorData = daily.map(d => d.error);
-  const latencyData = daily.map(d => d.avg_ms);
+  const labels   = daily.map(d => d.day);
+  const nGreen   = "#00ff88", nYellow = "#ffcc00", nRed = "#ff3366", nCyan = "#00f0ff", nPurple = "#aa44ff";
 
-  // Volume Chart
+  // Bar chart
   if (volumeChart) volumeChart.destroy();
   volumeChart = new Chart(document.getElementById("volumeChart"), {
     type: "bar",
     data: {
       labels,
       datasets: [
-        { label: "Success", data: successData, backgroundColor: "#22c55e", stack: "s" },
-        { label: "Fail", data: failData, backgroundColor: "#f59e0b", stack: "s" },
-        { label: "Error", data: errorData, backgroundColor: "#ef4444", stack: "s" },
+        { label: "Success", data: daily.map(d => d.success), backgroundColor: nGreen,  stack: "s" },
+        { label: "Fail",    data: daily.map(d => d.fail),    backgroundColor: nYellow, stack: "s" },
+        { label: "Error",   data: daily.map(d => d.error),   backgroundColor: nRed,    stack: "s" },
       ],
     },
-    options: { responsive: true, plugins: { legend: { position: "top" } }, scales: { x: { stacked: true }, y: { stacked: true } } },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { position: "top", labels: { boxWidth: 10, font: { size: 11 } } } },
+      scales: {
+        x: { stacked: true, ticks: { font: { size: 10 } } },
+        y: { stacked: true, ticks: { font: { size: 10 } } },
+      },
+    },
   });
 
-  // Status Donut
+  // Donut
   if (statusChart) statusChart.destroy();
   statusChart = new Chart(document.getElementById("statusChart"), {
     type: "doughnut",
     data: {
       labels: ["Success", "Fail", "Error"],
-      datasets: [{ data: [summary.success, summary.fail, summary.error], backgroundColor: ["#22c55e", "#f59e0b", "#ef4444"] }],
+      datasets: [{ data: [summary.success, summary.fail, summary.error],
+        backgroundColor: [nGreen, nYellow, nRed], borderWidth: 0 }],
     },
-    options: { responsive: true, plugins: { legend: { position: "bottom" } } },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      cutout: "65%",
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 10, font: { size: 10 } } } },
+    },
   });
 
-  // Latency Chart
+  // Latency line
   if (latencyChart) latencyChart.destroy();
   latencyChart = new Chart(document.getElementById("latencyChart"), {
     type: "line",
     data: {
       labels,
-      datasets: [{ label: "Avg Latency (ms)", data: latencyData, borderColor: "#6366f1", backgroundColor: "rgba(99,102,241,0.1)", fill: true, tension: 0.4 }],
+      datasets: [{ label: "Avg ms", data: daily.map(d => d.avg_ms),
+        borderColor: nPurple, backgroundColor: "rgba(170,68,255,0.08)",
+        fill: true, tension: 0.4, pointRadius: 3 }],
     },
-    options: { responsive: true, plugins: { legend: { display: false } } },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { ticks: { font: { size: 10 } } }, x: { ticks: { font: { size: 10 } } } },
+    },
   });
 
-  // Endpoint table
-  const tbody = document.getElementById("endpointTableBody");
-  if (perEp.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Belum ada data</td></tr>';
-  } else {
-    tbody.innerHTML = perEp.map(e => `
-      <tr>
-        <td><span class="badge badge--method-${e.method.toLowerCase()}">${e.method}</span></td>
-        <td class="text-mono text-sm">${e.path}</td>
-        <td>${e.total}</td>
-        <td class="text-success">${e.success}</td>
-        <td class="text-warn">${e.fail}</td>
-        <td class="${e.avg_ms > 2000 ? 'text-danger' : e.avg_ms > 1000 ? 'text-warn' : ''}">${e.avg_ms} ms</td>
-        <td>
-          <div class="rate-bar">
-            <div class="rate-bar__fill" style="width:${e.success_rate}%"></div>
-            <span>${e.success_rate}%</span>
-          </div>
-        </td>
-      </tr>`).join("");
-  }
+  // Top endpoint table — client pagination
+  renderTopEpTable(perEp, 1);
 }
 
+// ── Top Endpoint pagination ──
+let _epData = [], _epPage = 1, _epPageSize = 5;
+function renderTopEpTable(data, page) {
+  if (data) _epData = data;
+  _epPage = page;
+  const tbody  = document.getElementById("endpointTableBody");
+  const pager  = document.getElementById("topEpPager");
+  const infoEl = document.getElementById("topEpInfo");
+  const total  = _epData.length;
+  const start  = (_epPage - 1) * _epPageSize;
+  const slice  = _epData.slice(start, start + _epPageSize);
+  const pages  = Math.ceil(total / _epPageSize);
+
+  if (total === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:1.5rem">Belum ada data</td></tr>';
+    pager.style.display = "none"; return;
+  }
+
+  tbody.innerHTML = slice.map(e => `
+    <tr>
+      <td><span class="badge badge--method-${e.method.toLowerCase()}">${e.method}</span></td>
+      <td class="text-mono" style="font-size:.78rem">${e.path}</td>
+      <td>${e.total}</td>
+      <td class="text-success">${e.success}</td>
+      <td class="text-warn">${e.fail}</td>
+      <td>
+        <div class="rate-bar">
+          <div class="rate-bar__fill" style="width:${e.success_rate}%;min-width:0"></div>
+          <span style="font-size:.75rem;white-space:nowrap">${e.success_rate}%</span>
+        </div>
+      </td>
+    </tr>`).join("");
+
+  infoEl.textContent = `${start+1}–${Math.min(start+_epPageSize, total)} dari ${total}`;
+  pager.style.display = "flex";
+  document.getElementById("topEpPrev").disabled = _epPage <= 1;
+  document.getElementById("topEpNext").disabled = _epPage >= pages;
+}
+
+document.getElementById("topEpPrev").addEventListener("click", () => renderTopEpTable(null, _epPage - 1));
+document.getElementById("topEpNext").addEventListener("click", () => renderTopEpTable(null, _epPage + 1));
+
+// ── Recent Logs pagination ──
+let _logsPage = 1, _logsPageSize = 10;
+const _allRows = () => document.querySelectorAll("#recentLogsTbody .log-row");
+
+function renderLogsPagination() {
+  const rows   = _allRows();
+  const total  = rows.length;
+  if (total === 0) return;
+  const pages  = Math.ceil(total / _logsPageSize);
+  _logsPage    = Math.max(1, Math.min(_logsPage, pages));
+  const start  = (_logsPage - 1) * _logsPageSize;
+
+  rows.forEach((r, i) => r.style.display = (i >= start && i < start + _logsPageSize) ? "" : "none");
+
+  document.getElementById("recentLogsInfo").textContent =
+    `${start+1}–${Math.min(start+_logsPageSize, total)} dari ${total}`;
+  document.getElementById("recentLogsPrev").disabled = _logsPage <= 1;
+  document.getElementById("recentLogsNext").disabled = _logsPage >= pages;
+}
+
+document.getElementById("recentLogsPrev").addEventListener("click", () => { _logsPage--; renderLogsPagination(); });
+document.getElementById("recentLogsNext").addEventListener("click", () => { _logsPage++; renderLogsPagination(); });
+document.getElementById("recentLogsPageSize").addEventListener("change", e => {
+  _logsPageSize = parseInt(e.target.value); _logsPage = 1; renderLogsPagination();
+});
+
+// ── Init ──
 document.getElementById("chartDaysSelect").addEventListener("change", e => loadCharts(e.target.value));
 loadCharts(7);
-
-// Auto-refresh setiap 30 detik
+renderLogsPagination();
 setInterval(() => loadCharts(document.getElementById("chartDaysSelect").value), 30000);
 </script>
 {% endblock %}
