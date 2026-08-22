@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Endpoints — ApotekMonitor{% endblock %}
+{% block page_title %}Endpoints{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card__header">
+    <h2 class="card__title">Daftar API Endpoints</h2>
+  </div>
+  <div class="card__body">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nama</th>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Module</th>
+          <th>Total</th>
+          <th>Success</th>
+          <th>Fail</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ep in endpoints %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ ep.name }}</td>
+          <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
+          <td class="text-mono text-sm">{{ ep.path }}</td>
+          <td><span class="badge badge--module">{{ ep.module }}</span></td>
+          <td>{{ ep.total }}</td>
+          <td class="text-success">{{ ep.success }}</td>
+          <td class="text-warn">{{ ep.fail }}</td>
+          <td>
+            {% if ep.is_active %}
+              <span class="badge badge--success">Aktif</span>
+            {% else %}
+              <span class="badge badge--muted">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td class="actions-cell">
+            <a href="{% url 'endpoint_detail' ep.pk %}" class="btn btn--sm btn--secondary">Detail</a>
+            <button class="btn btn--sm btn--primary ping-btn" data-id="{{ ep.pk }}" data-path="{{ ep.path }}">
+              Ping
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="text-center text-muted" style="padding:2rem">
+            Belum ada endpoint. Tambahkan melalui <a href="/admin/">Django Admin</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Ping result toast -->
+<div class="toast" id="pingToast" style="display:none"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll(".ping-btn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.dataset.id;
+    const path = btn.dataset.path;
+    btn.disabled = true;
+    btn.textContent = "Pinging…";
+    try {
+      const res = await fetch(`/api/ping/${id}/`);
+      const data = await res.json();
+      const toast = document.getElementById("pingToast");
+      const ok = data.status === "success";
+      toast.className = `toast toast--${ok ? "success" : "error"}`;
+      toast.textContent = `[${data.status_code || "ERR"}] ${path} — ${data.response_time_ms} ms — ${data.status}`;
+      toast.style.display = "block";
+      setTimeout(() => { toast.style.display = "none"; }, 4000);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Ping";
+    }
+  });
+});
+</script>
+{% endblock %}

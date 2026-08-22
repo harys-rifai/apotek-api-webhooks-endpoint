@@ -1,0 +1,17 @@
+<header class="navbar">
+  <button class="navbar__toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+    <i class="fa-solid fa-bars"></i>
+  </button>
+
+  <div class="navbar__center">
+    <span class="navbar__title">{% block page_title %}Dashboard{% endblock %}</span>
+  </div>
+
+  <div class="navbar__right">
+    <div class="navbar__user">
+      <div class="navbar__avatar">{{ request.user.username|first|upper }}</div>
+      <span>{{ request.user.username }}</span>
+    </div>
+    <span class="navbar__time" id="clock"></span>
+  </div>
+</header>

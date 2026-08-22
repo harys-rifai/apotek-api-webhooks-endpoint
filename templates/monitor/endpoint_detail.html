@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ endpoint.name }} — ApotekMonitor{% endblock %}
+{% block page_title %}Endpoint Detail{% endblock %}
+
+{% block content %}
+<!-- Header info -->
+<div class="card" style="margin-bottom:1.25rem">
+  <div class="card__body" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <span class="badge badge--method-{{ endpoint.method|lower }}" style="font-size:.9rem;padding:4px 12px">{{ endpoint.method }}</span>
+    <code style="font-size:1rem">{{ endpoint.path }}</code>
+    <span class="badge badge--module">{{ endpoint.module }}</span>
+    {% if endpoint.is_active %}<span class="badge badge--success">Aktif</span>{% else %}<span class="badge badge--muted">Nonaktif</span>{% endif %}
+    <div style="margin-left:auto">
+      <button class="btn btn--primary ping-btn" data-id="{{ endpoint.pk }}">⚡ Ping Sekarang</button>
+    </div>
+  </div>
+</div>
+
+<!-- KPI mini -->
+<div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-bottom:1.25rem">
+  <div class="kpi-card kpi-card--total">
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Total (7 hari)</span>
+      <span class="kpi-card__value">{{ stats.total }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--success">
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Success</span>
+      <span class="kpi-card__value">{{ stats.success }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--fail">
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Fail</span>
+      <span class="kpi-card__value">{{ stats.fail }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--error">
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Error</span>
+      <span class="kpi-card__value">{{ stats.error }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--rate">
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Success Rate</span>
+      <span class="kpi-card__value">{{ stats.success_rate }}%</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--latency">
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Avg Latency</span>
+      <span class="kpi-card__value">{{ stats.avg_ms }} ms</span>
+    </div>
+  </div>
+</div>
+
+<!-- Log table -->
+<div class="card">
+  <div class="card__header">
+    <h2 class="card__title">100 Request Terbaru</h2>
+  </div>
+  <div class="card__body">
+    <table class="table table--compact">
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Status Code</th>
+          <th>Status</th>
+          <th>Latency</th>
+          <th>Attempt</th>
+          <th>Triggered By</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="text-muted text-sm">{{ log.created_at|date:"d/m/Y H:i:s" }}</td>
+          <td>
+            <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge--success{% elif log.status_code >= 400 and log.status_code < 500 %}badge--warn{% elif log.status_code %}badge--error{% else %}badge--muted{% endif %}">
+              {{ log.status_code|default:"—" }}
+            </span>
+          </td>
+          <td><span class="status-dot status-dot--{{ log.status }}"></span>{{ log.status }}</td>
+          <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}">
+            {{ log.response_time_ms|floatformat:0|default:"—" }} ms
+          </td>
+          <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}/{{ log.max_attempts }}</td>
+          <td class="text-muted">{{ log.triggered_by }}</td>
+          <td class="text-danger text-sm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.error_message }}">
+            {{ log.error_message|truncatechars:60 }}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Belum ada log untuk endpoint ini.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="toast" id="pingToast" style="display:none"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector(".ping-btn").addEventListener("click", async function() {
+  const btn = this;
+  btn.disabled = true; btn.textContent = "Pinging…";
+  const res = await fetch(`/api/ping/${btn.dataset.id}/`);
+  const data = await res.json();
+  const toast = document.getElementById("pingToast");
+  toast.className = `toast toast--${data.status === "success" ? "success" : "error"}`;
+  toast.textContent = `[${data.status_code || "ERR"}] ${data.response_time_ms} ms — ${data.status}${data.error ? " — " + data.error : ""}`;
+  toast.style.display = "block";
+  setTimeout(() => { toast.style.display = "none"; location.reload(); }, 3000);
+  btn.disabled = false; btn.textContent = "⚡ Ping Sekarang";
+});
+</script>
+{% endblock %}

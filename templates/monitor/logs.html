@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Request Logs — ApotekMonitor{% endblock %}
+{% block page_title %}Request Logs{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card__header">
+    <h2 class="card__title">Request Logs</h2>
+    <div class="card__actions">
+      <form method="get" style="display:flex;gap:.5rem;align-items:center">
+        <select name="status" class="select-sm" onchange="this.form.submit()">
+          <option value="">Semua Status</option>
+          <option value="success" {% if status_filter == "success" %}selected{% endif %}>Success</option>
+          <option value="fail"    {% if status_filter == "fail"    %}selected{% endif %}>Fail</option>
+          <option value="error"   {% if status_filter == "error"   %}selected{% endif %}>Error</option>
+        </select>
+        <select name="method" class="select-sm" onchange="this.form.submit()">
+          <option value="">Semua Method</option>
+          <option value="GET"    {% if method_filter == "GET"    %}selected{% endif %}>GET</option>
+          <option value="POST"   {% if method_filter == "POST"   %}selected{% endif %}>POST</option>
+          <option value="PUT"    {% if method_filter == "PUT"    %}selected{% endif %}>PUT</option>
+          <option value="PATCH"  {% if method_filter == "PATCH"  %}selected{% endif %}>PATCH</option>
+          <option value="DELETE" {% if method_filter == "DELETE" %}selected{% endif %}>DELETE</option>
+        </select>
+      </form>
+    </div>
+  </div>
+  <div class="card__body" style="padding:0">
+    <table class="table table--compact">
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Status Code</th>
+          <th>Status</th>
+          <th>Latency</th>
+          <th>Retry</th>
+          <th>Triggered By</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="text-muted text-sm" style="white-space:nowrap">{{ log.created_at|date:"d/m H:i:s" }}</td>
+          <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
+          <td class="text-mono text-sm">{{ log.path }}</td>
+          <td>
+            <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge--success{% elif log.status_code >= 400 and log.status_code < 500 %}badge--warn{% elif log.status_code %}badge--error{% else %}badge--muted{% endif %}">
+              {{ log.status_code|default:"—" }}
+            </span>
+          </td>
+          <td><span class="status-dot status-dot--{{ log.status }}"></span>{{ log.status }}</td>
+          <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}" style="white-space:nowrap">
+            {{ log.response_time_ms|floatformat:0|default:"—" }} ms
+          </td>
+          <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}</td>
+          <td class="text-muted">{{ log.triggered_by }}</td>
+          <td class="text-danger text-sm" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ log.error_message }}">
+            {{ log.error_message|truncatechars:40 }}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted" style="padding:2rem">Tidak ada log ditemukan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

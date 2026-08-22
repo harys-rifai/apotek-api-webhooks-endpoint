@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Webhooks — ApotekMonitor{% endblock %}
+{% block page_title %}Webhook Events{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:1rem">
+  <div class="card__body">
+    <p style="color:var(--color-muted);font-size:.85rem">
+      Endpoint penerima webhook: <code>POST /webhook/receive/</code>
+      &nbsp;·&nbsp; Kirim JSON dengan field <code>event</code> untuk mencatat event.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card__header">
+    <h2 class="card__title">100 Event Terbaru</h2>
+  </div>
+  <div class="card__body" style="padding:0">
+    <table class="table table--compact">
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Event Type</th>
+          <th>Source IP</th>
+          <th>Status</th>
+          <th>Payload (preview)</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ev in events %}
+        <tr>
+          <td class="text-muted text-sm" style="white-space:nowrap">{{ ev.received_at|date:"d/m H:i:s" }}</td>
+          <td><span class="badge badge--info">{{ ev.event_type }}</span></td>
+          <td class="text-mono text-sm">{{ ev.source_ip|default:"—" }}</td>
+          <td>
+            <span class="badge {% if ev.status == 'processed' %}badge--success{% elif ev.status == 'failed' %}badge--error{% else %}badge--warn{% endif %}">
+              {{ ev.status }}
+            </span>
+          </td>
+          <td class="text-mono text-sm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ ev.payload }}">
+            {{ ev.payload|truncatechars:80 }}
+          </td>
+          <td class="text-danger text-sm">{{ ev.error_message|truncatechars:50 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Belum ada webhook event diterima.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

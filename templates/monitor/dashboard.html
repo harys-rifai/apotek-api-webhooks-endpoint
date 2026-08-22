@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — ApotekMonitor{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="kpi-grid">
+  <div class="kpi-card kpi-card--total">
+    <div class="kpi-card__icon">📡</div>
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Total Requests (7 hari)</span>
+      <span class="kpi-card__value">{{ stats.total }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--success">
+    <div class="kpi-card__icon">✅</div>
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Success</span>
+      <span class="kpi-card__value">{{ stats.success }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--fail">
+    <div class="kpi-card__icon">❌</div>
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Fail (4xx)</span>
+      <span class="kpi-card__value">{{ stats.fail }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--error">
+    <div class="kpi-card__icon">🔥</div>
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Error (5xx/Timeout)</span>
+      <span class="kpi-card__value">{{ stats.error }}</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--rate">
+    <div class="kpi-card__icon">📈</div>
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Business Success Rate</span>
+      <span class="kpi-card__value">{{ stats.success_rate }}%</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card--latency">
+    <div class="kpi-card__icon">⏱</div>
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Avg Latency</span>
+      <span class="kpi-card__value">{{ stats.avg_ms }} ms</span>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="chart-row">
+  <div class="card chart-card">
+    <div class="card__header">
+      <h2 class="card__title">Request Volume (7 hari)</h2>
+      <div class="card__actions">
+        <select id="chartDaysSelect" class="select-sm">
+          <option value="7">7 hari</option>
+          <option value="14">14 hari</option>
+          <option value="30">30 hari</option>
+        </select>
+      </div>
+    </div>
+    <div class="card__body">
+      <canvas id="volumeChart" height="100"></canvas>
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="card__header">
+      <h2 class="card__title">Status Distribution</h2>
+    </div>
+    <div class="card__body chart-donut-wrap">
+      <canvas id="statusChart" height="200"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Latency Chart -->
+<div class="card" style="margin-bottom:1.5rem">
+  <div class="card__header">
+    <h2 class="card__title">Avg Latency per Hari (ms)</h2>
+  </div>
+  <div class="card__body">
+    <canvas id="latencyChart" height="80"></canvas>
+  </div>
+</div>
+
+<!-- Bottom Row -->
+<div class="bottom-row">
+  <!-- Top Endpoints Table -->
+  <div class="card table-card">
+    <div class="card__header">
+      <h2 class="card__title">Top 10 Endpoint</h2>
+      <a href="{% url 'endpoint_list' %}" class="card__link">Lihat semua →</a>
+    </div>
+    <div class="card__body">
+      <table class="table" id="endpointTable">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Path</th>
+            <th>Total</th>
+            <th>Success</th>
+            <th>Fail</th>
+            <th>Avg ms</th>
+            <th>Rate</th>
+          </tr>
+        </thead>
+        <tbody id="endpointTableBody">
+          <tr><td colspan="7" class="text-center text-muted">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Slow Endpoints -->
+  <div class="card table-card">
+    <div class="card__header">
+      <h2 class="card__title">Slowest Endpoints</h2>
+    </div>
+    <div class="card__body">
+      <table class="table">
+        <thead>
+          <tr><th>Method</th><th>Path</th><th>Avg ms</th><th>Calls</th></tr>
+        </thead>
+        <tbody>
+          {% for ep in slow_endpoints %}
+          <tr>
+            <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
+            <td class="text-mono">{{ ep.path }}</td>
+            <td class="{% if ep.avg_ms > 2000 %}text-danger{% elif ep.avg_ms > 1000 %}text-warn{% endif %}">
+              {{ ep.avg_ms|floatformat:0 }} ms
+            </td>
+            <td>{{ ep.calls }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="text-center text-muted">Belum ada data</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Logs -->
+<div class="card">
+  <div class="card__header">
+    <h2 class="card__title">Recent Requests</h2>
+    <a href="{% url 'log_list' %}" class="card__link">Lihat semua →</a>
+  </div>
+  <div class="card__body">
+    <table class="table table--compact">
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Status Code</th>
+          <th>Status</th>
+          <th>Latency</th>
+          <th>Retry</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in recent_logs %}
+        <tr>
+          <td class="text-muted text-sm">{{ log.created_at|date:"d/m H:i:s" }}</td>
+          <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
+          <td class="text-mono text-sm">{{ log.path }}</td>
+          <td>
+            <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge--success{% elif log.status_code >= 400 and log.status_code < 500 %}badge--warn{% elif log.status_code %}badge--error{% else %}badge--muted{% endif %}">
+              {{ log.status_code|default:"—" }}
+            </span>
+          </td>
+          <td><span class="status-dot status-dot--{{ log.status }}"></span> {{ log.status }}</td>
+          <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}">
+            {{ log.response_time_ms|floatformat:0|default:"—" }} ms
+          </td>
+          <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted">Belum ada log. Ping endpoint untuk mulai.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const STATS_URL = "{% url 'api_stats_json' %}";
+let volumeChart, statusChart, latencyChart;
+
+async function loadCharts(days = 7) {
+  const res = await fetch(`${STATS_URL}?days=${days}`);
+  const json = await res.json();
+  const daily = json.daily;
+  const summary = json.summary;
+  const perEp = json.per_endpoint;
+
+  const labels = daily.map(d => d.day);
+  const successData = daily.map(d => d.success);
+  const failData = daily.map(d => d.fail);
+  const errorData = daily.map(d => d.error);
+  const latencyData = daily.map(d => d.avg_ms);
+
+  // Volume Chart
+  if (volumeChart) volumeChart.destroy();
+  volumeChart = new Chart(document.getElementById("volumeChart"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { label: "Success", data: successData, backgroundColor: "#22c55e", stack: "s" },
+        { label: "Fail", data: failData, backgroundColor: "#f59e0b", stack: "s" },
+        { label: "Error", data: errorData, backgroundColor: "#ef4444", stack: "s" },
+      ],
+    },
+    options: { responsive: true, plugins: { legend: { position: "top" } }, scales: { x: { stacked: true }, y: { stacked: true } } },
+  });
+
+  // Status Donut
+  if (statusChart) statusChart.destroy();
+  statusChart = new Chart(document.getElementById("statusChart"), {
+    type: "doughnut",
+    data: {
+      labels: ["Success", "Fail", "Error"],
+      datasets: [{ data: [summary.success, summary.fail, summary.error], backgroundColor: ["#22c55e", "#f59e0b", "#ef4444"] }],
+    },
+    options: { responsive: true, plugins: { legend: { position: "bottom" } } },
+  });
+
+  // Latency Chart
+  if (latencyChart) latencyChart.destroy();
+  latencyChart = new Chart(document.getElementById("latencyChart"), {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{ label: "Avg Latency (ms)", data: latencyData, borderColor: "#6366f1", backgroundColor: "rgba(99,102,241,0.1)", fill: true, tension: 0.4 }],
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } },
+  });
+
+  // Endpoint table
+  const tbody = document.getElementById("endpointTableBody");
+  if (perEp.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Belum ada data</td></tr>';
+  } else {
+    tbody.innerHTML = perEp.map(e => `
+      <tr>
+        <td><span class="badge badge--method-${e.method.toLowerCase()}">${e.method}</span></td>
+        <td class="text-mono text-sm">${e.path}</td>
+        <td>${e.total}</td>
+        <td class="text-success">${e.success}</td>
+        <td class="text-warn">${e.fail}</td>
+        <td class="${e.avg_ms > 2000 ? 'text-danger' : e.avg_ms > 1000 ? 'text-warn' : ''}">${e.avg_ms} ms</td>
+        <td>
+          <div class="rate-bar">
+            <div class="rate-bar__fill" style="width:${e.success_rate}%"></div>
+            <span>${e.success_rate}%</span>
+          </div>
+        </td>
+      </tr>`).join("");
+  }
+}
+
+document.getElementById("chartDaysSelect").addEventListener("change", e => loadCharts(e.target.value));
+loadCharts(7);
+
+// Auto-refresh setiap 30 detik
+setInterval(() => loadCharts(document.getElementById("chartDaysSelect").value), 30000);
+</script>
+{% endblock %}
