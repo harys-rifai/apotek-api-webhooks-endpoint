@@ -247,11 +247,62 @@ def api_activity_json(request):
     })
 
 
+def _probe_apotek_db():
+    """Return ('healthy'|'critical', detail) by probing ApotekApps PostgreSQL.
+
+    Tries a real psycopg connection first; falls back to a TCP socket check
+    on host:port so we still detect a disconnect without the driver.
+    """
+    host = "localhost"
+    port = 5432
+    name = "apotek_pos"
+    user = "postgres"
+    password = ""
+    # read ApotekApps env if present (best-effort)
+    import os
+    apps_env = os.path.join(settings.BASE_DIR.parent.parent, "ApotekApps", ".env")
+    try:
+        from decouple import Config, RepositoryEnv
+        cfg = Config(RepositoryEnv(apps_env))
+        host = cfg.get("DB_HOST", default=host)
+        port = int(cfg.get("DB_PORT", default=port))
+        name = cfg.get("DB_NAME", default=name)
+        user = cfg.get("DB_USER", default=user)
+        password = cfg.get("DB_PASSWORD", default=password)
+    except Exception:
+        pass
+
+    # 1) TCP reachability
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout=2):
+            pass
+    except Exception as e:
+        return "critical", f"DB unreachable: {e}"
+
+    # 2) real connection if driver available
+    try:
+        import psycopg
+        conn = psycopg.connect(
+            host=host, port=port, dbname=name, user=user,
+            password=password, connect_timeout=2,
+        )
+        conn.close()
+        return "healthy", "connected"
+    except ImportError:
+        return "healthy", "port open (no driver)"
+    except Exception as e:
+        return "critical", f"connect failed: {e}"
+
+
 @login_required
 def api_topology_json(request):
     """Dynatrace-style smartscape: services as nodes, traffic as edges, live health."""
     now = timezone.now()
     since = now - timedelta(minutes=5)
+
+    # Real DB health probe (PostgreSQL behind ApotekApps)
+    db_status, db_detail = _probe_apotek_db()
 
     # Build nodes from monitored endpoints (grouped by module = service)
     eps = APIEndpoint.objects.filter(is_active=True)
@@ -265,11 +316,24 @@ def api_topology_json(request):
     # Core infrastructure nodes
     nodes.append({
         "id": "pg", "label": "PostgreSQL", "kind": "database",
-        "tech": "PostgreSQL 16", "status": "healthy",
+        "tech": "PostgreSQL 16", "status": db_status, "detail": db_detail,
     })
+    # apps_api health depends on DB + recent ping success
+    recent_all = APIRequestLog.objects.filter(created_at__gte=since)
+    recent_total = recent_all.count()
+    recent_fail = recent_all.filter(status__in=["fail", "error"]).count()
+    if db_status == "critical":
+        apps_status = "critical"
+    elif recent_total and (recent_fail / recent_total) > 0.5:
+        apps_status = "critical"
+    elif recent_total and (recent_fail / recent_total) > 0.2:
+        apps_status = "warning"
+    else:
+        apps_status = "healthy"
     nodes.append({
         "id": "apps_api", "label": "ApotekApps REST API", "kind": "service",
-        "tech": "Django + DRF :8000", "status": "healthy",
+        "tech": "Django + DRF :8000", "status": apps_status,
+        "detail": f"DB: {db_status}",
     })
     nodes.append({
         "id": "monitor", "label": "ApotekMonitor", "kind": "service",
@@ -300,9 +364,9 @@ def api_topology_json(request):
         edges.append({"from": "apps_api", "to": f"svc_{mod}",
                       "requests_5m": total, "status": status})
 
-    # edges: infra relationships
-    edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": "healthy"})
-    edges.append({"from": "apps_api", "to": "monitor", "requests_5m": 0, "status": "healthy"})
+    # edges: infra relationships (reflect real health)
+    edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": db_status})
+    edges.append({"from": "apps_api", "to": "monitor", "requests_5m": 0, "status": apps_status})
     edges.append({"from": "monitor", "to": "monitor_db", "requests_5m": 0, "status": "healthy"})
 
     # overall health

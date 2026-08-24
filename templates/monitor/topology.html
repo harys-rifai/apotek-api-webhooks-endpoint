@@ -35,6 +35,7 @@
   .node-metric{ font-size:11px; font-family:inherit; }
   .edge-line { fill:none; stroke-width:2; opacity:.5; stroke-dasharray:6 8;
                animation: dash 1s linear infinite; }
+  .edge-line.down { opacity:.9; stroke-dasharray:none; animation:none; stroke-width:3; }
   @keyframes dash { to { stroke-dashoffset: -28; } }
 
   .pulse-ring { fill:none; stroke-width:2; opacity:0; }
@@ -71,6 +72,7 @@
   <span class="stat badge--info" id="pollState">polling…</span>
   <span class="stat">Nodes: <b id="nodeCount">0</b></span>
   <span class="stat">Edges: <b id="edgeCount">0</b></span>
+  <span class="stat" style="color:var(--color-muted)">💡 Seret node untuk menyusun ulang</span>
 </div>
 
 <div id="topoWrap">
@@ -111,18 +113,10 @@
   const tooltip = document.getElementById("tooltip");
   const wrap = document.getElementById("topoWrap");
 
-  // fixed smartscape layout (x,y in 1000x560 space)
-  const LAYOUT = {
-    pg:         { x: 120, y: 280 },
-    apps_api:   { x: 340, y: 280 },
-    monitor:    { x: 640, y: 280 },
-    monitor_db: { x: 880, y: 280 },
-  };
-  // module service nodes arranged in a column above the API
-  const MOD_COL = { x: 340, y0: 60, gap: 64 };
-
   let nodeState = {};   // id -> {x,y,el,...}
   let edgeState = [];   // {from,to,lineEl,particles,status}
+  let dragId = null, dragOff = { x: 0, y: 0 };
+  const VB_W = 1000, VB_H = 560;
 
   function el(tag, attrs) {
     const e = document.createElementNS(SVG_NS, tag);
@@ -130,22 +124,41 @@
     return e;
   }
 
-  function placeNode(n) {
-    let x, y;
-    if (LAYOUT[n.id]) { x = LAYOUT[n.id].x; y = LAYOUT[n.id].y; }
-    else {
-      // module service: stable position by index
-      const idx = nodeState._modOrder ? nodeState._modOrder.indexOf(n.id) : 0;
-      x = MOD_COL.x; y = MOD_COL.y0 + idx * MOD_COL.gap;
-    }
-    return { x, y };
+  // Scattered "smartscape" layout — not a single straight line.
+  // Core infra nodes are placed at distinct positions; module services
+  // are tiled in a 2-column grid on the right/top area.
+  function placeNode(n, index, total) {
+    if (n._x != null && n._y != null) return { x: n._x, y: n._y };
+    const CORE = {
+      pg:         { x: 130, y: 130 },
+      apps_api:   { x: 400, y: 300 },
+      monitor:    { x: 720, y: 300 },
+      monitor_db: { x: 900, y: 130 },
+    };
+    if (CORE[n.id]) return { x: CORE[n.id].x, y: CORE[n.id].y };
+
+    // module services: 2-column tiled grid, staggered
+    const cols = 2, gapX = 250, gapY = 92, x0 = 360, y0 = 70;
+    const col = index % cols, row = Math.floor(index / cols);
+    return { x: x0 + col * gapX, y: y0 + row * gapY };
   }
 
-  function drawNode(n) {
-    const { x, y } = placeNode(n);
+  function clientToSvg(evt) {
+    const svg = document.getElementById("topoSvg");
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    const ctm = svg.getScreenCTM().inverse();
+    const p = pt.matrixTransform(ctm);
+    return { x: p.x, y: p.y };
+  }
+
+  function drawNode(n, index, total) {
+    const { x, y } = placeNode(n, index, total);
     const baseColor = n.kind === "database" ? COLOR.database : COLOR.service;
     const statusColor = COLOR[n.status] || baseColor;
-    const g = el("g", { class: "node-card", transform: `translate(${x},${y})` });
+    const g = el("g", { class: "node-card", transform: `translate(${x},${y})`,
+      style: "cursor:grab" });
+    g.dataset.id = n.id;
 
     const w = 180, h = 54;
     const rect = el("rect", { class: "node-rect", x: -w/2, y: -h/2, width: w, height: h,
@@ -198,6 +211,30 @@
     });
     g.addEventListener("mouseleave", () => tooltip.style.display = "none");
 
+    // ── drag support ──
+    g.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      dragId = n.id;
+      const p = clientToSvg(ev);
+      dragOff = { x: p.x - x, y: p.y - y };
+      g.style.cursor = "grabbing";
+      g.setAttribute("opacity", "0.85");
+    });
+    g.addEventListener("pointermove", (ev) => {
+      if (dragId !== n.id) return;
+      const p = clientToSvg(ev);
+      let nx = Math.max(90, Math.min(VB_W - 90, p.x - dragOff.x));
+      let ny = Math.max(30, Math.min(VB_H - 30, p.y - dragOff.y));
+      nodeState[n.id].x = nx; nodeState[n.id].y = ny;
+      g.setAttribute("transform", `translate(${nx},${ny})`);
+      redrawEdges();
+    });
+    const endDrag = () => {
+      if (dragId === n.id) { g.style.cursor = "grab"; g.setAttribute("opacity", "1"); }
+    };
+    g.addEventListener("pointerup", endDrag);
+    g.addEventListener("pointerleave", endDrag);
+
     nodesLayer.appendChild(g);
     nodeState[n.id] = { x, y, g, statusColor, status: n.status };
   }
@@ -206,29 +243,43 @@
     const a = nodeState[e.from], b = nodeState[e.to];
     if (!a || !b) return;
     const color = COLOR[e.status] || COLOR.service;
-    const line = el("path", { class: "edge-line", d: edgePath(a, b), stroke: color });
+    const down = (e.status === "critical");
+    const line = el("path", {
+      class: "edge-line" + (down ? " down" : ""),
+      d: edgePath(a, b), stroke: color
+    });
     edgesLayer.appendChild(line);
 
-    // particles travelling along the edge
-    const N = 3;
+    // particles travelling along the edge (hidden when link is down)
+    const N = down ? 0 : 3;
     const parts = [];
     for (let i = 0; i < N; i++) {
       const p = el("circle", { class: "particle", r: 3, fill: color, opacity: .9 });
       edgesLayer.appendChild(p);
       parts.push({ el: p, t: i / N });
     }
-    edgeState.push({ ...e, a, b, line, parts, color });
+    edgeState.push({ ...e, a, b, line, parts, color, down });
   }
 
   function edgePath(a, b) {
-    // vertical-ish smartscape links; simple curved path
+    // curved smartscape links between node centers
     const midY = (a.y + b.y) / 2;
     return `M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`;
+  }
+
+  function redrawEdges() {
+    for (const ed of edgeState) {
+      const a = nodeState[ed.from], b = nodeState[ed.to];
+      if (!a || !b) continue;
+      ed.a = a; ed.b = b;
+      ed.line.setAttribute("d", edgePath(a, b));
+    }
   }
 
   function animate() {
     const speed = 0.004;
     for (const ed of edgeState) {
+      if (ed.down) continue;   // no traffic animation on a down link
       for (const p of ed.parts) {
         p.t = (p.t + speed) % 1;
         const pt = pointOnPath(ed.a, ed.b, p.t);
@@ -253,12 +304,23 @@
     const modNodes = data.nodes.filter(n => n.id.startsWith("svc_"));
     nodeState._modOrder = modNodes.map(n => n.id);
 
+    // keep manually dragged positions across reloads
+    const userPos = {};
+    for (const id in nodeState) {
+      if (id === "_modOrder") continue;
+      if (nodeState[id] && nodeState[id].x != null) userPos[id] = nodeState[id];
+    }
+
     // rebuild
     nodesLayer.innerHTML = ""; edgesLayer.innerHTML = "";
     nodeState = { _modOrder: nodeState._modOrder }; edgeState = [];
 
-    data.nodes.forEach(drawNode);
+    data.nodes.forEach((n, i) => {
+      if (userPos[n.id]) { n._x = userPos[n.id].x; n._y = userPos[n.id].y; }
+      drawNode(n, i, data.nodes.length);
+    });
     data.edges.forEach(drawEdge);
+    redrawEdges();
 
     document.getElementById("overall").textContent = data.overall_success_rate + "%";
     document.getElementById("overall").style.color =
@@ -268,6 +330,9 @@
     document.getElementById("nodeCount").textContent = data.nodes.length;
     document.getElementById("edgeCount").textContent = data.edges.length;
   }
+
+  // global pointerup ends any drag
+  window.addEventListener("pointerup", () => { dragId = null; });
 
   let first = true;
   async function tick() {
