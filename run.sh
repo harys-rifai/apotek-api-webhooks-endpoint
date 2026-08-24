@@ -6,6 +6,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+PORT=8090
+# Kill any existing process on this port to avoid "port already in use"
+PIDS=$(lsof -ti ":$PORT" 2>/dev/null || true)
+if [ -n "$PIDS" ]; then
+  echo "Freeing port $PORT (PID: $PIDS)..."
+  kill -9 $PIDS 2>/dev/null || true
+  sleep 1
+fi
+
+
 # Pilih Python: prioritas python3.11 dari Homebrew
 if command -v /opt/homebrew/bin/python3.11 &>/dev/null; then
     PYTHON=/opt/homebrew/bin/python3.11
