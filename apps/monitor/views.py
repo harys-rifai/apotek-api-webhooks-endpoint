@@ -133,6 +133,18 @@ def webhook_list(request):
     return render(request, "monitor/webhooks.html", context)
 
 
+@login_required
+def architecture_view(request):
+    context = {"active_menu": "architecture"}
+    return render(request, "monitor/architecture.html", context)
+
+
+@login_required
+def topology_view(request):
+    context = {"active_menu": "topology"}
+    return render(request, "monitor/topology.html", context)
+
+
 # ── API Actions (AJAX) ────────────────────────────────────────────────────────
 
 @login_required
@@ -210,6 +222,100 @@ def api_stats_json(request):
             }
             for e in per_ep
         ],
+    })
+
+
+@login_required
+def api_activity_json(request):
+    """Return recent activity so the architecture diagram can animate in realtime."""
+    last_log = APIRequestLog.objects.order_by("-created_at").first()
+    last_wh = WebhookEvent.objects.order_by("-received_at").first()
+    since = timezone.now() - timedelta(seconds=10)
+    recent_logs = APIRequestLog.objects.filter(created_at__gte=since).count()
+    recent_wh = WebhookEvent.objects.filter(received_at__gte=since).count()
+    return JsonResponse({
+        "last_log_at": last_log.created_at.isoformat() if last_log else None,
+        "last_log_status": last_log.status if last_log else None,
+        "last_log_path": last_log.path if last_log else None,
+        "last_wh_at": last_wh.received_at.isoformat() if last_wh else None,
+        "last_wh_event": last_wh.event_type if last_wh else None,
+        "recent_logs_10s": recent_logs,
+        "recent_wh_10s": recent_wh,
+        "total_logs": APIRequestLog.objects.count(),
+        "total_wh": WebhookEvent.objects.count(),
+        "server_time": timezone.now().isoformat(),
+    })
+
+
+@login_required
+def api_topology_json(request):
+    """Dynatrace-style smartscape: services as nodes, traffic as edges, live health."""
+    now = timezone.now()
+    since = now - timedelta(minutes=5)
+
+    # Build nodes from monitored endpoints (grouped by module = service)
+    eps = APIEndpoint.objects.filter(is_active=True)
+    modules = {}
+    for ep in eps:
+        modules.setdefault(ep.module, []).append(ep)
+
+    nodes = []
+    edges = []
+
+    # Core infrastructure nodes
+    nodes.append({
+        "id": "pg", "label": "PostgreSQL", "kind": "database",
+        "tech": "PostgreSQL 16", "status": "healthy",
+    })
+    nodes.append({
+        "id": "apps_api", "label": "ApotekApps REST API", "kind": "service",
+        "tech": "Django + DRF :8000", "status": "healthy",
+    })
+    nodes.append({
+        "id": "monitor", "label": "ApotekMonitor", "kind": "service",
+        "tech": "Django :8090", "status": "healthy",
+    })
+    nodes.append({
+        "id": "monitor_db", "label": "Monitor SQLite", "kind": "database",
+        "tech": "SQLite", "status": "healthy",
+    })
+
+    # Module → service nodes (one per module = microservice)
+    for mod, ep_list in modules.items():
+        q = APIRequestLog.objects.filter(endpoint__in=ep_list, created_at__gte=since)
+        total = q.count()
+        succ = q.filter(status="success").count()
+        avg = q.aggregate(a=Avg("response_time_ms"))["a"] or 0
+        rate = round(succ / total * 100, 1) if total else 100
+        status = "healthy" if rate >= 95 else ("warning" if rate >= 80 else "critical")
+        if total == 0:
+            status = "idle"
+        nodes.append({
+            "id": f"svc_{mod}", "label": mod.capitalize(), "kind": "service",
+            "tech": f"{len(ep_list)} endpoints",
+            "status": status, "requests_5m": total,
+            "success_rate": rate, "avg_ms": round(avg, 1),
+        })
+        # edge: ApotekApps API -> module service
+        edges.append({"from": "apps_api", "to": f"svc_{mod}",
+                      "requests_5m": total, "status": status})
+
+    # edges: infra relationships
+    edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": "healthy"})
+    edges.append({"from": "apps_api", "to": "monitor", "requests_5m": 0, "status": "healthy"})
+    edges.append({"from": "monitor", "to": "monitor_db", "requests_5m": 0, "status": "healthy"})
+
+    # overall health
+    total_all = APIRequestLog.objects.filter(created_at__gte=since).count()
+    succ_all = APIRequestLog.objects.filter(created_at__gte=since, status="success").count()
+    overall = round(succ_all / total_all * 100, 1) if total_all else 100
+
+    return JsonResponse({
+        "nodes": nodes,
+        "edges": edges,
+        "overall_success_rate": overall,
+        "total_requests_5m": total_all,
+        "server_time": now.isoformat(),
     })
 
 

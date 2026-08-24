@@ -23,6 +23,14 @@
       <i class="fa-solid fa-bell sidebar__icon"></i>
       <span>Webhooks</span>
     </a>
+    <a href="{% url 'architecture' %}" class="sidebar__item {% if active_menu == 'architecture' %}active{% endif %}">
+      <i class="fa-solid fa-diagram-project sidebar__icon"></i>
+      <span>Architecture</span>
+    </a>
+    <a href="{% url 'topology' %}" class="sidebar__item {% if active_menu == 'topology' %}active{% endif %}">
+      <i class="fa-solid fa-network-wired sidebar__icon"></i>
+      <span>Topology</span>
+    </a>
 
     <div class="sidebar__divider"></div>
 

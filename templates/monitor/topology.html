@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}Topology — ApotekMonitor{% endblock %}
+{% block page_title %}Topology · Smartscape{% endblock %}
+
+{% block extra_head %}
+<style>
+  .topo-bar {
+    display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; margin-bottom:1rem;
+  }
+  .topo-bar .stat {
+    background:var(--bg-card); border:1px solid var(--color-border,#2a2a40);
+    border-radius:var(--radius-md); padding:.45rem .8rem; font-size:.8rem;
+  }
+  .topo-bar .stat b { font-size:1.05rem; }
+  #topoWrap {
+    background:
+      radial-gradient(circle at 20% 20%, rgba(54,224,255,.07), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(54,255,158,.07), transparent 40%),
+      var(--bg-card);
+    border:1px solid var(--color-border,#2a2a40);
+    border-radius:var(--radius-lg);
+    position:relative; overflow:hidden;
+  }
+  #topoSvg { width:100%; height:560px; display:block; }
+
+  /* background grid like dynatrace */
+  #topoSvg .grid { stroke: rgba(255,255,255,.04); stroke-width:1; }
+  .node-card { cursor:default; }
+  .node-rect {
+    fill: rgba(20,20,38,.92); stroke-width:2; rx:14;
+    filter: drop-shadow(0 0 6px rgba(0,0,0,.4));
+  }
+  .node-title { fill:#fff; font-size:14px; font-weight:600; font-family:inherit; }
+  .node-sub   { fill: var(--color-muted); font-size:11px; font-family:inherit; }
+  .node-metric{ font-size:11px; font-family:inherit; }
+  .edge-line { fill:none; stroke-width:2; opacity:.5; stroke-dasharray:6 8;
+               animation: dash 1s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -28; } }
+
+  .pulse-ring { fill:none; stroke-width:2; opacity:0; }
+  @keyframes ring { 0%{opacity:.7; r:18;} 100%{opacity:0; r:46;} }
+
+  .particle { fill:#fff; }
+
+  .legend {
+    display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin-top:1rem;
+    font-size:.78rem; color:var(--color-muted); justify-content:center;
+  }
+  .legend .item { display:inline-flex; align-items:center; gap:.45rem;
+    padding:.3rem .6rem; border-radius:999px; background:var(--bg-card);
+    border:1px solid var(--color-border,#2a2a40); }
+  .legend .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  .node-tooltip {
+    position:absolute; pointer-events:none; background:#0c0c18; color:#fff;
+    border:1px solid var(--color-border,#2a2a40); border-radius:8px;
+    padding:.5rem .7rem; font-size:.75rem; max-width:230px; display:none; z-index:20;
+    box-shadow:0 6px 20px rgba(0,0,0,.5);
+  }
+  .node-tooltip b { color:var(--neon-cyan); }
+  @media (prefers-reduced-motion: reduce){
+    .edge-line{animation:none;} .pulse-ring{display:none;}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topo-bar">
+  <span class="stat">Overall health: <b id="overall">—</b></span>
+  <span class="stat">Requests (5m): <b id="req5m">0</b></span>
+  <span class="stat badge--info" id="pollState">polling…</span>
+  <span class="stat">Nodes: <b id="nodeCount">0</b></span>
+  <span class="stat">Edges: <b id="edgeCount">0</b></span>
+</div>
+
+<div id="topoWrap">
+  <svg id="topoSvg" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path class="grid" d="M40 0 L0 0 0 40"/>
+      </pattern>
+    </defs>
+    <rect x="0" y="0" width="1000" height="560" fill="url(#grid)"/>
+    <g id="edgesLayer"></g>
+    <g id="nodesLayer"></g>
+  </svg>
+  <div class="node-tooltip" id="tooltip"></div>
+</div>
+
+<div class="legend">
+  <span class="item"><span class="sw" style="background:#36ff9e"></span> Healthy</span>
+  <span class="item"><span class="sw" style="background:#ffd23f"></span> Warning (&lt;95%)</span>
+  <span class="item"><span class="sw" style="background:#ff4d6d"></span> Critical (&lt;80%)</span>
+  <span class="item"><span class="sw" style="background:#7a7a9d"></span> Idle / no traffic</span>
+  <span class="item"><span class="sw" style="background:#b06bff"></span> Database</span>
+  <span class="item"><span class="sw" style="background:#36e0ff"></span> Service / API</span>
+  <span class="item"><i class="fa-solid fa-circle-nodes" style="color:#36e0ff"></i> Animated edges = live traffic</span>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const COLOR = {
+    healthy: "#36ff9e", warning: "#ffd23f", critical: "#ff4d6d",
+    idle: "#7a7a9d", database: "#b06bff", service: "#36e0ff"
+  };
+  const nodesLayer = document.getElementById("nodesLayer");
+  const edgesLayer = document.getElementById("edgesLayer");
+  const tooltip = document.getElementById("tooltip");
+  const wrap = document.getElementById("topoWrap");
+
+  // fixed smartscape layout (x,y in 1000x560 space)
+  const LAYOUT = {
+    pg:         { x: 120, y: 280 },
+    apps_api:   { x: 340, y: 280 },
+    monitor:    { x: 640, y: 280 },
+    monitor_db: { x: 880, y: 280 },
+  };
+  // module service nodes arranged in a column above the API
+  const MOD_COL = { x: 340, y0: 60, gap: 64 };
+
+  let nodeState = {};   // id -> {x,y,el,...}
+  let edgeState = [];   // {from,to,lineEl,particles,status}
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(SVG_NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function placeNode(n) {
+    let x, y;
+    if (LAYOUT[n.id]) { x = LAYOUT[n.id].x; y = LAYOUT[n.id].y; }
+    else {
+      // module service: stable position by index
+      const idx = nodeState._modOrder ? nodeState._modOrder.indexOf(n.id) : 0;
+      x = MOD_COL.x; y = MOD_COL.y0 + idx * MOD_COL.gap;
+    }
+    return { x, y };
+  }
+
+  function drawNode(n) {
+    const { x, y } = placeNode(n);
+    const baseColor = n.kind === "database" ? COLOR.database : COLOR.service;
+    const statusColor = COLOR[n.status] || baseColor;
+    const g = el("g", { class: "node-card", transform: `translate(${x},${y})` });
+
+    const w = 180, h = 54;
+    const rect = el("rect", { class: "node-rect", x: -w/2, y: -h/2, width: w, height: h,
+      rx: 14, stroke: statusColor, fill: "rgba(20,20,38,.92)" });
+
+    const ring = el("circle", { class: "pulse-ring", cx: 0, cy: 0, r: 18, stroke: statusColor });
+    ring.innerHTML = "<animate attributeName='r' from='18' to='46' dur='2.2s' repeatCount='indefinite'/>" +
+                     "<animate attributeName='opacity' from='0.7' to='0' dur='2.2s' repeatCount='indefinite'/>";
+
+    // distinct glyph per node role (emoji renders reliably inside SVG)
+    const GLYPH = {
+      pg: "🗄️",            // PostgreSQL
+      apps_api: "🛰️",      // ApotekApps REST API
+      monitor: "📡",        // ApotekMonitor
+      monitor_db: "💾",     // Monitor SQLite
+    };
+    const MOD_GLYPH = {
+      auth: "🔐", users: "👤", roles: "🛡️", medicines: "💊", suppliers: "🚚",
+      inventory: "📦", purchasing: "🧾", sales: "🧮", orders: "🛒",
+      attendance: "🕒", dashboard: "📊", reports: "📈", audit: "🔍", common: "⚙️",
+    };
+    let glyph = GLYPH[n.id];
+    if (!glyph && n.id.startsWith("svc_")) glyph = MOD_GLYPH[n.id.slice(4)] || "🧩";
+    if (!glyph) glyph = n.kind === "database" ? "🗄️" : "⚙️";
+
+    const iconTxt = el("text", { x: -w/2 + 16, y: 2, "font-size": 20,
+      "text-anchor": "middle" });
+    iconTxt.textContent = glyph;
+
+    const title = el("text", { class: "node-title", x: -w/2 + 36, y: -6 });
+    title.textContent = n.label.length > 20 ? n.label.slice(0,19)+"…" : n.label;
+    const sub = el("text", { class: "node-sub", x: -w/2 + 36, y: 12 });
+    sub.textContent = n.tech || "";
+
+    const metric = el("text", { class: "node-metric", x: w/2 - 12, y: -6, "text-anchor": "end", fill: statusColor });
+    metric.textContent = n.success_rate != null ? n.success_rate + "%" : "";
+    const metric2 = el("text", { class: "node-metric", x: w/2 - 12, y: 12, "text-anchor": "end", fill: "var(--color-muted)" });
+    metric2.textContent = n.requests_5m != null ? (n.requests_5m + " req") : "";
+
+    g.appendChild(ring); g.appendChild(rect); g.appendChild(iconTxt);
+    g.appendChild(title); g.appendChild(sub); g.appendChild(metric); g.appendChild(metric2);
+
+    g.addEventListener("mousemove", (ev) => {
+      const r = wrap.getBoundingClientRect();
+      tooltip.style.display = "block";
+      tooltip.style.left = (ev.clientX - r.left + 14) + "px";
+      tooltip.style.top = (ev.clientY - r.top + 14) + "px";
+      tooltip.innerHTML = `<b>${n.label}</b><br>Type: ${n.kind}<br>Tech: ${n.tech||"—"}` +
+        (n.success_rate != null ? `<br>Health: ${n.success_rate}%<br>Requests/5m: ${n.requests_5m}<br>Avg: ${n.avg_ms} ms` : "");
+    });
+    g.addEventListener("mouseleave", () => tooltip.style.display = "none");
+
+    nodesLayer.appendChild(g);
+    nodeState[n.id] = { x, y, g, statusColor, status: n.status };
+  }
+
+  function drawEdge(e) {
+    const a = nodeState[e.from], b = nodeState[e.to];
+    if (!a || !b) return;
+    const color = COLOR[e.status] || COLOR.service;
+    const line = el("path", { class: "edge-line", d: edgePath(a, b), stroke: color });
+    edgesLayer.appendChild(line);
+
+    // particles travelling along the edge
+    const N = 3;
+    const parts = [];
+    for (let i = 0; i < N; i++) {
+      const p = el("circle", { class: "particle", r: 3, fill: color, opacity: .9 });
+      edgesLayer.appendChild(p);
+      parts.push({ el: p, t: i / N });
+    }
+    edgeState.push({ ...e, a, b, line, parts, color });
+  }
+
+  function edgePath(a, b) {
+    // vertical-ish smartscape links; simple curved path
+    const midY = (a.y + b.y) / 2;
+    return `M ${a.x} ${a.y} C ${a.x} ${midY}, ${b.x} ${midY}, ${b.x} ${b.y}`;
+  }
+
+  function animate() {
+    const speed = 0.004;
+    for (const ed of edgeState) {
+      for (const p of ed.parts) {
+        p.t = (p.t + speed) % 1;
+        const pt = pointOnPath(ed.a, ed.b, p.t);
+        p.el.setAttribute("cx", pt.x);
+        p.el.setAttribute("cy", pt.y);
+      }
+    }
+    requestAnimationFrame(animate);
+  }
+
+  function pointOnPath(a, b, t) {
+    // cubic bezier with control points from edgePath
+    const midY = (a.y + b.y) / 2;
+    const mt = 1 - t;
+    const x = mt*mt*mt*a.x + 3*mt*mt*t*a.x + 3*mt*t*t*b.x + t*t*t*b.x;
+    const y = mt*mt*mt*a.y + 3*mt*mt*t*midY + 3*mt*t*t*midY + t*t*t*b.y;
+    return { x, y };
+  }
+
+  function render(data) {
+    // preserve module order for stable layout
+    const modNodes = data.nodes.filter(n => n.id.startsWith("svc_"));
+    nodeState._modOrder = modNodes.map(n => n.id);
+
+    // rebuild
+    nodesLayer.innerHTML = ""; edgesLayer.innerHTML = "";
+    nodeState = { _modOrder: nodeState._modOrder }; edgeState = [];
+
+    data.nodes.forEach(drawNode);
+    data.edges.forEach(drawEdge);
+
+    document.getElementById("overall").textContent = data.overall_success_rate + "%";
+    document.getElementById("overall").style.color =
+      data.overall_success_rate >= 95 ? COLOR.healthy :
+      data.overall_success_rate >= 80 ? COLOR.warning : COLOR.critical;
+    document.getElementById("req5m").textContent = data.total_requests_5m;
+    document.getElementById("nodeCount").textContent = data.nodes.length;
+    document.getElementById("edgeCount").textContent = data.edges.length;
+  }
+
+  let first = true;
+  async function tick() {
+    try {
+      const r = await fetch("{% url 'api_topology_json' %}", { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      const d = await r.json();
+      render(d);
+      const ps = document.getElementById("pollState");
+      ps.textContent = "live"; ps.className = "stat badge--success";
+      if (first) { animate(); first = false; }
+    } catch (e) {
+      const ps = document.getElementById("pollState");
+      ps.textContent = "offline"; ps.className = "stat badge--danger";
+    }
+  }
+  tick();
+  setInterval(tick, 3000);
+})();
+</script>
+{% endblock %}
