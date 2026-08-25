@@ -14,41 +14,95 @@
 
 <div class="card">
   <div class="card__header">
-    <h2 class="card__title">100 Event Terbaru</h2>
+    <h2 class="card__title"><i class="fa-solid fa-bell" style="color:var(--neon-yellow)"></i> 100 Event Terbaru</h2>
+    <div class="card__actions">
+      <form method="get" id="whFilterForm" style="display:flex;gap:6px;align-items:center">
+        <select name="status" class="select-sm" onchange="this.form.submit()">
+          <option value="">Semua Status</option>
+          <option value="received"  {% if status_filter == "received"  %}selected{% endif %}>Received</option>
+          <option value="processed" {% if status_filter == "processed" %}selected{% endif %}>Processed</option>
+          <option value="failed"    {% if status_filter == "failed"    %}selected{% endif %}>Failed</option>
+        </select>
+      </form>
+    </div>
   </div>
   <div class="card__body" style="padding:0">
-    <table class="table table--compact">
-      <thead>
-        <tr>
-          <th>Waktu</th>
-          <th>Event Type</th>
-          <th>Source IP</th>
-          <th>Status</th>
-          <th>Payload (preview)</th>
-          <th>Error</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for ev in events %}
-        <tr>
-          <td class="text-muted text-sm" style="white-space:nowrap">{{ ev.received_at|date:"d/m H:i:s" }}</td>
-          <td><span class="badge badge--info">{{ ev.event_type }}</span></td>
-          <td class="text-mono text-sm">{{ ev.source_ip|default:"—" }}</td>
-          <td>
-            <span class="badge {% if ev.status == 'processed' %}badge--success{% elif ev.status == 'failed' %}badge--error{% else %}badge--warn{% endif %}">
-              {{ ev.status }}
-            </span>
-          </td>
-          <td class="text-mono text-sm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ ev.payload }}">
-            {{ ev.payload|truncatechars:80 }}
-          </td>
-          <td class="text-danger text-sm">{{ ev.error_message|truncatechars:50 }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Belum ada webhook event diterima.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrapper">
+      <table class="table table--compact">
+        <thead>
+          <tr>
+            <th>Waktu</th>
+            <th>Event Type</th>
+            <th>Source IP</th>
+            <th>Status</th>
+            <th>Payload (preview)</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ev in events %}
+          <tr class="wh-row">
+            <td class="text-muted text-sm" style="white-space:nowrap">{{ ev.received_at|date:"d/m H:i:s" }}</td>
+            <td><span class="badge badge--info">{{ ev.event_type }}</span></td>
+            <td class="text-mono text-sm">{{ ev.source_ip|default:"—" }}</td>
+            <td>
+              <span class="status-dot status-dot--{{ ev.status }}"></span>{{ ev.status }}
+            </td>
+            <td class="text-mono text-sm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ ev.payload }}">
+              {{ ev.payload|truncatechars:80 }}
+            </td>
+            <td class="text-danger text-sm">{{ ev.error_message|truncatechars:50 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Belum ada webhook event diterima.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination-bar" id="whPager">
+      <span class="page-info" id="whInfo"></span>
+      <div class="page-actions">
+        <span class="page-size-label">Rows:</span>
+        <select id="whPageSize" class="select-sm">
+          <option value="15" selected>15</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button class="btn btn-outline btn-sm" id="whPrev">‹ Prev</button>
+        <button class="btn btn-outline btn-sm" id="whNext">Next ›</button>
+      </div>
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let _whPage = 1, _whPageSize = 15;
+const rows = () => [...document.querySelectorAll(".wh-row")];
+
+function renderWh() {
+  const all   = rows();
+  const total = all.length;
+  if (total === 0) { document.getElementById("whPager").style.display = "none"; return; }
+  const pages = Math.ceil(total / _whPageSize);
+  _whPage = Math.max(1, Math.min(_whPage, pages));
+  const start = (_whPage - 1) * _whPageSize;
+
+  all.forEach((r, i) => r.style.display = (i >= start && i < start + _whPageSize) ? "" : "none");
+
+  document.getElementById("whInfo").textContent =
+    `${start+1}–${Math.min(start+_whPageSize, total)} dari ${total}`;
+  document.getElementById("whPrev").disabled = _whPage <= 1;
+  document.getElementById("whNext").disabled = _whPage >= pages;
+}
+
+document.getElementById("whPrev").addEventListener("click",     () => { _whPage--; renderWh(); });
+document.getElementById("whNext").addEventListener("click",     () => { _whPage++; renderWh(); });
+document.getElementById("whPageSize").addEventListener("change", e => { _whPageSize = +e.target.value; _whPage = 1; renderWh(); });
+
+renderWh();
+</script>
 {% endblock %}

@@ -35,11 +35,6 @@
     display: flex; flex-direction: column; align-items: center;
     color: var(--color-muted); font-size: .76rem; line-height: 1.1;
   }
-  .arch-edge .label {
-    margin: .3rem 0; padding: .25rem .7rem; border-radius: 999px;
-    background: var(--bg-card); border: 1px dashed var(--color-border, #2a2a40);
-    white-space: nowrap;
-  }
   .arch-edge .line {
     width: 2px; height: 40px; position: relative;
     background: linear-gradient(var(--neon-cyan), var(--neon-green));
@@ -88,6 +83,15 @@
   }
   .legend .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
   .legend .ic { width:18px; text-align:center; }
+  .legend .item { position:relative; cursor:default; padding:.4rem .55rem; }
+  .legend .item::after {
+    content: attr(data-tip); position:absolute; bottom:115%; left:50%; transform:translateX(-50%);
+    white-space:nowrap; background:#11151f; color:#cfe; font-size:.72rem; padding:.3rem .55rem;
+    border:1px solid var(--color-border,#2a2a40); border-radius:8px; opacity:0; pointer-events:none;
+    transition:opacity .2s;
+  }
+  .legend .item:hover::after { opacity:1; }
+  .legend .ic-lg { font-size:1.05rem; }
 
   .live-feed {
     margin-top:1.5rem; width:min(600px,100%);
@@ -133,11 +137,10 @@
     </div>
   </div>
 
-  <div class="arch-edge" data-edge="db-api">
+  <div class="arch-edge" data-edge="db-api" title="SQL query &amp; writes (Django ORM)">
     <div class="line"></div>
     <div class="pulse"></div>
     <div class="burst"><i class="fa-solid fa-database"></i></div>
-    <div class="label">SQL query &amp; writes (Django ORM)</div>
   </div>
 
   <!-- APOTEK APPS (API) -->
@@ -151,11 +154,10 @@
     </div>
   </div>
 
-  <div class="arch-edge reverse" data-edge="api-mon">
+  <div class="arch-edge reverse" data-edge="api-mon" title="HTTP GET/POST + Bearer JWT → JSON response">
     <div class="line"></div>
     <div class="pulse"></div>
     <div class="burst"><i class="fa-solid fa-paper-plane"></i></div>
-    <div class="label">HTTP GET/POST + Bearer JWT &nbsp;→&nbsp; JSON response</div>
   </div>
 
   <!-- MONITOR -->
@@ -169,11 +171,10 @@
     </div>
   </div>
 
-  <div class="arch-edge" data-edge="mon-db">
+  <div class="arch-edge" data-edge="mon-db" title="Simpan hasil ke APIRequestLog &amp; WebhookEvent (SQLite)">
     <div class="line"></div>
     <div class="pulse"></div>
     <div class="burst"><i class="fa-solid fa-floppy-disk"></i></div>
-    <div class="label">Simpan hasil ke APIRequestLog &amp; WebhookEvent (SQLite)</div>
   </div>
 
   <!-- MONITOR DB -->
@@ -215,14 +216,14 @@
 
 <!-- LEGEND (network plan style) -->
 <div class="legend">
-  <span class="item"><i class="dot" style="background:var(--neon-purple,#b06bff)"></i> PostgreSQL</span>
-  <span class="item"><i class="dot" style="background:var(--neon-cyan)"></i> ApotekApps API :8000</span>
-  <span class="item"><i class="dot" style="background:var(--neon-green)"></i> ApotekMonitor :8090</span>
-  <span class="item"><i class="dot" style="background:var(--neon-yellow)"></i> Monitor SQLite</span>
-  <span class="item"><span class="ic" style="color:var(--neon-cyan)"><i class="fa-solid fa-paper-plane"></i></span> API poll (request)</span>
-  <span class="item"><span class="ic" style="color:var(--neon-green)"><i class="fa-solid fa-floppy-disk"></i></span> Simpan log</span>
-  <span class="item"><span class="ic" style="color:var(--neon-yellow)"><i class="fa-solid fa-bell"></i></span> Webhook masuk</span>
-  <span class="item"><span class="ic" style="color:var(--neon-purple,#b06bff)"><i class="fa-solid fa-database"></i></span> Akses DB</span>
+  <span class="item" data-tip="PostgreSQL"><span class="ic ic-lg" style="color:var(--neon-purple,#b06bff)"><i class="fa-solid fa-database"></i></span></span>
+  <span class="item" data-tip="ApotekApps API :8000"><span class="ic ic-lg" style="color:var(--neon-cyan)"><i class="fa-solid fa-server"></i></span></span>
+  <span class="item" data-tip="ApotekMonitor :8090"><span class="ic ic-lg" style="color:var(--neon-green)"><i class="fa-solid fa-chart-line"></i></span></span>
+  <span class="item" data-tip="Monitor SQLite"><span class="ic ic-lg" style="color:var(--neon-yellow)"><i class="fa-solid fa-table"></i></span></span>
+  <span class="item" data-tip="API poll (request)"><span class="ic ic-lg" style="color:var(--neon-cyan)"><i class="fa-solid fa-paper-plane"></i></span></span>
+  <span class="item" data-tip="Simpan log"><span class="ic ic-lg" style="color:var(--neon-yellow)"><i class="fa-solid fa-floppy-disk"></i></span></span>
+  <span class="item" data-tip="Webhook masuk"><span class="ic ic-lg" style="color:var(--neon-yellow)"><i class="fa-solid fa-bell"></i></span></span>
+  <span class="item" data-tip="Akses DB"><span class="ic ic-lg" style="color:var(--neon-purple,#b06bff)"><i class="fa-solid fa-database"></i></span></span>
 </div>
 {% endblock %}
 

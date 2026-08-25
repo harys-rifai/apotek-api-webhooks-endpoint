@@ -129,8 +129,16 @@ def log_list(request):
 
 @login_required
 def webhook_list(request):
-    events = WebhookEvent.objects.order_by("-received_at")[:100]
-    context = {"events": events, "active_menu": "webhooks"}
+    status_filter = request.GET.get("status", "")
+    qs = WebhookEvent.objects.all()
+    if status_filter in {"received", "processed", "failed"}:
+        qs = qs.filter(status=status_filter)
+    events = qs.order_by("-received_at")[:100]
+    context = {
+        "events": events,
+        "active_menu": "webhooks",
+        "status_filter": status_filter,
+    }
     return render(request, "monitor/webhooks.html", context)
 
 
@@ -138,6 +146,46 @@ def webhook_list(request):
 def architecture_view(request):
     context = {"active_menu": "architecture"}
     return render(request, "monitor/architecture.html", context)
+
+
+@login_required
+def delivery_list(request):
+    """Pantau pengantaran obat dari ApotekApps (/deliveries/)."""
+    deliveries = []
+    api_state = "ok"
+    api_msg = ""
+    api_unavailable = False
+    endpoint = APIEndpoint.objects.filter(path="/deliveries/").first()
+    try:
+        res = call_api("GET", "/deliveries/", endpoint_obj=endpoint, save_log=True,
+                       triggered_by="manual")
+        if res.get("status") == APIRequestLog.STATUS_SUCCESS:
+            data = res.get("data") or {}
+            deliveries = data.get("results") or data.get("data") or []
+            if isinstance(deliveries, dict):
+                deliveries = [deliveries]
+        else:
+            status_code = res.get("status_code")
+            raw = (res.get("error") or "").strip()
+            # 404 / respons bukan JSON (halaman HTML) → endpoint belum tersedia
+            if status_code == 404 or raw.lower().startswith("<!doctype") or "<html" in raw.lower():
+                api_unavailable = True
+                api_msg = "Endpoint /deliveries/ belum tersedia di ApotekApps."
+            else:
+                api_state = "error"
+                api_msg = res.get("error") or f"HTTP {status_code}"
+    except Exception as e:
+        api_state = "error"
+        api_msg = str(e)
+
+    context = {
+        "active_menu": "deliveries",
+        "deliveries": deliveries,
+        "api_state": api_state,
+        "api_msg": api_msg,
+        "api_unavailable": api_unavailable,
+    }
+    return render(request, "monitor/deliveries.html", context)
 
 
 @login_required
@@ -248,30 +296,36 @@ def api_activity_json(request):
     })
 
 
+def _apotek_apps_dir():
+    """Best-effort path to the sibling ApotekApps project."""
+    import os
+    return os.path.join(os.path.dirname(str(settings.BASE_DIR)), "ApotekApps")
+
+
+def _apotek_apps_config():
+    """Read ApotekApps/.env (best-effort). Returns a getter with defaults."""
+    import os
+    apps_env = os.path.join(_apotek_apps_dir(), ".env")
+    try:
+        from decouple import Config, RepositoryEnv
+        cfg = Config(RepositoryEnv(apps_env))
+        return lambda key, default=None: cfg.get(key, default=default)
+    except Exception:
+        return lambda key, default=None: default
+
+
 def _probe_apotek_db():
     """Return ('healthy'|'critical', detail) by probing ApotekApps PostgreSQL.
 
     Tries a real psycopg connection first; falls back to a TCP socket check
     on host:port so we still detect a disconnect without the driver.
     """
-    host = "localhost"
-    port = 5432
-    name = "apotek_pos"
-    user = "postgres"
-    password = ""
-    # read ApotekApps env if present (best-effort)
-    import os
-    apps_env = os.path.join(settings.BASE_DIR.parent.parent, "ApotekApps", ".env")
-    try:
-        from decouple import Config, RepositoryEnv
-        cfg = Config(RepositoryEnv(apps_env))
-        host = cfg.get("DB_HOST", default=host)
-        port = int(cfg.get("DB_PORT", default=port))
-        name = cfg.get("DB_NAME", default=name)
-        user = cfg.get("DB_USER", default=user)
-        password = cfg.get("DB_PASSWORD", default=password)
-    except Exception:
-        pass
+    cfg = _apotek_apps_config()
+    host = cfg("DB_HOST", "localhost")
+    port = int(cfg("DB_PORT", 5432))
+    name = cfg("DB_NAME", "apotek_pos")
+    user = cfg("DB_USER", "postgres")
+    password = cfg("DB_PASSWORD", "")
 
     # 1) TCP reachability
     import socket
@@ -296,14 +350,144 @@ def _probe_apotek_db():
         return "critical", f"connect failed: {e}"
 
 
+def _parse_redis_url(url: str) -> dict:
+    """Parse redis://[:password@]host:port/db into parts (no external deps)."""
+    from urllib.parse import urlparse, unquote
+    parsed = urlparse(url)
+    db = 0
+    if parsed.path and len(parsed.path) > 1:
+        try:
+            db = int(parsed.path.lstrip("/"))
+        except ValueError:
+            db = 0
+    return {
+        "host": parsed.hostname or "127.0.0.1",
+        "port": parsed.port or 6379,
+        "password": unquote(parsed.password) if parsed.password else "",
+        "db": db,
+        "ssl": parsed.scheme == "rediss",
+    }
+
+
+def _probe_redis():
+    """Probe Redis with a raw RESP PING (no redis-py dependency required).
+
+    Returns (status, detail, meta) where status is healthy|warning|critical.
+    """
+    import socket
+    import time
+
+    cfg = _apotek_apps_config()
+    url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
+    info = _parse_redis_url(url)
+    meta = {"host": f"{info['host']}:{info['port']}", "db": info["db"]}
+
+    def encode(*args):
+        out = f"*{len(args)}\r\n".encode()
+        for a in args:
+            a = str(a).encode()
+            out += b"$%d\r\n%s\r\n" % (len(a), a)
+        return out
+
+    try:
+        started = time.time()
+        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
+            if info["ssl"]:
+                import ssl as _ssl
+                sock = _ssl.create_default_context().wrap_socket(
+                    sock, server_hostname=info["host"]
+                )
+            sock.settimeout(2)
+            payload = b""
+            if info["password"]:
+                payload += encode("AUTH", info["password"])
+            payload += encode("PING")
+            payload += encode("INFO", "server")
+            sock.sendall(payload)
+
+            raw = b""
+            deadline = time.time() + 2
+            while b"+PONG" not in raw and b"-" not in raw[:1] and time.time() < deadline:
+                chunk = sock.recv(8192)
+                if not chunk:
+                    break
+                raw += chunk
+                if b"redis_version" in raw or b"-ERR" in raw or b"-NOAUTH" in raw:
+                    break
+
+        latency = round((time.time() - started) * 1000, 1)
+        meta["latency_ms"] = latency
+        text = raw.decode(errors="replace")
+
+        if "NOAUTH" in text or "WRONGPASS" in text or "invalid password" in text.lower():
+            return "critical", "auth failed", meta
+        if "+PONG" not in text:
+            return "critical", "no PONG response", meta
+
+        for line in text.splitlines():
+            if line.startswith("redis_version:"):
+                meta["version"] = line.split(":", 1)[1].strip()
+                break
+        return "healthy", f"PONG {latency} ms", meta
+    except Exception as e:
+        return "critical", f"unreachable: {e}", meta
+
+
+def _probe_media():
+    """Probe ApotekApps media storage directory (exists + writable + size)."""
+    import os
+
+    cfg = _apotek_apps_config()
+    media_root = cfg("MEDIA_ROOT") or os.path.join(_apotek_apps_dir(), "media")
+    meta = {"path": media_root}
+
+    if not os.path.isdir(media_root):
+        return "critical", "directory missing", meta
+    if not os.access(media_root, os.W_OK):
+        return "warning", "not writable", meta
+
+    files = 0
+    total = 0
+    try:
+        for root, _dirs, names in os.walk(media_root):
+            for fn in names:
+                if fn.startswith("."):
+                    continue
+                files += 1
+                try:
+                    total += os.path.getsize(os.path.join(root, fn))
+                except OSError:
+                    pass
+                if files >= 20000:  # safety cap
+                    break
+            if files >= 20000:
+                break
+    except OSError as e:
+        return "warning", f"scan error: {e}", meta
+
+    if total >= 1024 ** 3:
+        size = f"{total / 1024 ** 3:.1f} GB"
+    elif total >= 1024 ** 2:
+        size = f"{total / 1024 ** 2:.1f} MB"
+    elif total >= 1024:
+        size = f"{total / 1024:.1f} KB"
+    else:
+        size = f"{total} B"
+
+    meta.update({"files": files, "size": size, "bytes": total})
+    return "healthy", f"{files} files · {size}", meta
+
+
 @login_required
 def api_topology_json(request):
     """Dynatrace-style smartscape: services as nodes, traffic as edges, live health."""
     now = timezone.now()
     since = now - timedelta(minutes=5)
 
-    # Real DB health probe (PostgreSQL behind ApotekApps)
+    # Real health probes for ApotekApps backing services
     db_status, db_detail = _probe_apotek_db()
+    redis_status, redis_detail, redis_meta = _probe_redis()
+    media_status, media_detail, media_meta = _probe_media()
 
     # Build nodes from monitored endpoints (grouped by module = service)
     eps = APIEndpoint.objects.filter(is_active=True)
@@ -319,6 +503,23 @@ def api_topology_json(request):
         "id": "pg", "label": "PostgreSQL", "kind": "database",
         "tech": "PostgreSQL 16", "status": db_status, "detail": db_detail,
     })
+    if redis_meta.get("version"):
+        redis_tech = f"Redis {redis_meta['version']} · db{redis_meta.get('db', 0)}"
+    else:
+        redis_tech = f"Redis · {redis_meta.get('host', 'n/a')}"
+    nodes.append({
+        "id": "redis", "label": "Redis Cache", "kind": "cache",
+        "tech": redis_tech,
+        "status": redis_status, "detail": redis_detail,
+        "host": redis_meta.get("host"), "db_index": redis_meta.get("db"),
+        "latency_ms": redis_meta.get("latency_ms"),
+    })
+    nodes.append({
+        "id": "media", "label": "Media Storage", "kind": "storage",
+        "tech": f"Filesystem · {media_meta.get('size', '0 B')}",
+        "status": media_status, "detail": media_detail,
+        "path": media_meta.get("path"), "files": media_meta.get("files"),
+    })
     # apps_api health depends on DB + recent ping success
     recent_all = APIRequestLog.objects.filter(created_at__gte=since)
     recent_total = recent_all.count()
@@ -329,12 +530,15 @@ def api_topology_json(request):
         apps_status = "critical"
     elif recent_total and (recent_fail / recent_total) > 0.2:
         apps_status = "warning"
+    elif redis_status == "critical" or media_status == "critical":
+        # Redis has a locmem fallback and media only affects uploads → degraded, not down
+        apps_status = "warning"
     else:
         apps_status = "healthy"
     nodes.append({
         "id": "apps_api", "label": "ApotekApps REST API", "kind": "service",
         "tech": "Django + DRF :8000", "status": apps_status,
-        "detail": f"DB: {db_status}",
+        "detail": f"DB: {db_status} · Redis: {redis_status} · Media: {media_status}",
     })
     nodes.append({
         "id": "monitor", "label": "ApotekMonitor", "kind": "service",
@@ -366,7 +570,12 @@ def api_topology_json(request):
                       "requests_5m": total, "status": status})
 
     # edges: infra relationships (reflect real health)
-    edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": db_status})
+    edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": db_status,
+                  "label": "SQL"})
+    edges.append({"from": "redis", "to": "apps_api", "requests_5m": 0, "status": redis_status,
+                  "label": "cache"})
+    edges.append({"from": "media", "to": "apps_api", "requests_5m": 0, "status": media_status,
+                  "label": "files"})
     edges.append({"from": "apps_api", "to": "monitor", "requests_5m": 0, "status": apps_status})
     edges.append({"from": "monitor", "to": "monitor_db", "requests_5m": 0, "status": "healthy"})
 
@@ -380,6 +589,11 @@ def api_topology_json(request):
         "edges": edges,
         "overall_success_rate": overall,
         "total_requests_5m": total_all,
+        "infra": {
+            "postgres": {"status": db_status, "detail": db_detail},
+            "redis": {"status": redis_status, "detail": redis_detail, **redis_meta},
+            "media": {"status": media_status, "detail": media_detail, **media_meta},
+        },
         "server_time": now.isoformat(),
     })
 

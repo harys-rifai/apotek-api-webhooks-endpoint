@@ -31,6 +31,10 @@
       <i class="fa-solid fa-network-wired sidebar__icon"></i>
       <span>Topology</span>
     </a>
+    <a href="{% url 'delivery_list' %}" class="sidebar__item {% if active_menu == 'deliveries' %}active{% endif %}">
+      <i class="fa-solid fa-truck-medical sidebar__icon"></i>
+      <span>Pengantaran Obat</span>
+    </a>
 
     <div class="sidebar__divider"></div>
 

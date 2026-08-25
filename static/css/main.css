@@ -249,6 +249,9 @@
 .status-dot--success { background: var(--neon-green);  box-shadow: 0 0 6px var(--neon-green); }
 .status-dot--fail    { background: var(--neon-yellow); box-shadow: 0 0 6px var(--neon-yellow); }
 .status-dot--error   { background: var(--neon-red);    box-shadow: 0 0 6px var(--neon-red); }
+.status-dot--received  { background: var(--neon-cyan, #36e0ff);  box-shadow: 0 0 6px var(--neon-cyan, #36e0ff); }
+.status-dot--processed { background: var(--neon-green, #36ff9e); box-shadow: 0 0 6px var(--neon-green, #36ff9e); }
+.status-dot--failed    { background: var(--neon-red, #ff5b6e);    box-shadow: 0 0 6px var(--neon-red, #ff5b6e); }
 
 /* ── Rate bar ────────────────────────────────────────────────── */
 .rate-bar { display: flex; align-items: center; gap: 6px; }

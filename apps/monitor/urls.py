@@ -9,6 +9,7 @@ urlpatterns = [
     path("webhooks/", views.webhook_list, name="webhook_list"),
     path("architecture/", views.architecture_view, name="architecture"),
     path("topology/", views.topology_view, name="topology"),
+    path("deliveries/", views.delivery_list, name="delivery_list"),
     # AJAX / API
     path("api/ping/<int:pk>/", views.api_ping, name="api_ping"),
     path("api/stats/", views.api_stats_json, name="api_stats_json"),

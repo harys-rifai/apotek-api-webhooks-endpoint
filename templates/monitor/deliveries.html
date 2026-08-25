@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Pengantaran Obat — ApotekMonitor{% endblock %}
+{% block page_title %}Pengantaran Obat{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:1rem">
+  <div class="card__body">
+    <p style="color:var(--color-muted);font-size:.85rem">
+      Memantau data pengantaran obat dari ApotekApps
+      (<code>GET /deliveries/</code>). Status ditampilkan dari respons API.
+    </p>
+  </div>
+</div>
+
+{% if api_unavailable %}
+<div class="alert alert--warn" style="margin-bottom:1rem">
+  <i class="fa-solid fa-triangle-exclamation"></i>
+  {{ api_msg }} Tambahkan endpoint tersebut di ApotekApps untuk menampilkan data pengantaran.
+</div>
+{% elif api_state == "error" %}
+<div class="alert alert--error" style="margin-bottom:1rem">
+  <i class="fa-solid fa-circle-exclamation"></i>
+  Gagal mengambil data pengantaran obat: {{ api_msg }}
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card__header">
+    <h2 class="card__title"><i class="fa-solid fa-truck-medical" style="color:var(--neon-yellow)"></i> Daftar Pengantaran</h2>
+    <div class="card__actions">
+      <a href="{% url 'delivery_list' %}" class="btn btn-outline btn-sm"><i class="fa-solid fa-rotate"></i> Refresh</a>
+    </div>
+  </div>
+  <div class="card__body" style="padding:0">
+    <div class="table-wrapper">
+      <table class="table table--compact">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Order / Resep</th>
+            <th>Pasien / Tujuan</th>
+            <th>Kurir</th>
+            <th>Status</th>
+            <th>Waktu</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in deliveries %}
+          <tr>
+            <td class="text-muted text-sm">{{ forloop.counter }}</td>
+            <td class="text-mono text-sm">{{ d.order_ref|default:d.id|default:"—" }}</td>
+            <td class="text-sm">{{ d.patient|default:d.destination|default:"—" }}</td>
+            <td class="text-sm">{{ d.courier|default:d.driver|default:"—" }}</td>
+            <td>
+              {% with st=d.status|default:"unknown" %}
+              <span class="badge
+                {% if st == 'delivered' or st == 'selesai' or st == 'done' %}badge--success
+                {% elif st == 'in_transit' or st == 'on_delivery' or st == 'proses' %}badge--info
+                {% elif st == 'failed' or st == 'gagal' or st == 'returned' %}badge--error
+                {% else %}badge--warn{% endif %}">
+                {{ st|title }}
+              </span>
+              {% endwith %}
+            </td>
+            <td class="text-muted text-sm" style="white-space:nowrap">{{ d.delivered_at|default:d.created_at|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">
+            {% if api_state == "ok" %}Belum ada data pengantaran obat.{% else %}Data tidak tersedia.{% endif %}
+          </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

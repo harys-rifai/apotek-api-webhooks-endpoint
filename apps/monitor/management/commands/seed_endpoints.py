@@ -53,6 +53,8 @@ ENDPOINTS = [
     ("Audit Logs",      "GET",  "/audit/logs/",          "audit"),
     # Common
     ("Stores",          "GET",  "/common/stores/",       "common"),
+    # Deliveries
+    ("Medicine Deliveries", "GET",  "/deliveries/",      "deliveries"),
 ]
 
 

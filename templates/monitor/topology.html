@@ -5,19 +5,19 @@
 {% block extra_head %}
 <style>
   /* ===== Dynatrace-like smartscape theme ===== */
-  .topo-layout { display:grid; grid-template-columns: 210px 1fr; gap:1rem; align-items:start; }
-  @media (max-width:820px){ .topo-layout{ grid-template-columns:1fr; } }
+  .topo-layout { display:block; }
 
   .topo-filter {
     background:var(--bg-card); border:1px solid var(--color-border,#2a2a40);
-    border-radius:var(--radius-lg); padding:.9rem; position:sticky; top:1rem;
+    border-radius:var(--radius-lg); padding:.7rem .9rem; margin-bottom:1rem;
+    display:flex; align-items:center; flex-wrap:wrap; gap:.5rem;
   }
-  .topo-filter h4 { margin:0 0 .6rem; font-size:.72rem; letter-spacing:.08em;
+  .topo-filter h4 { margin:0 .6rem 0 .2rem; font-size:.72rem; letter-spacing:.08em;
     text-transform:uppercase; color:var(--color-muted); }
   .filter-btn {
-    display:flex; align-items:center; gap:.5rem; width:100%; text-align:left;
+    display:flex; align-items:center; gap:.5rem; width:auto; text-align:left;
     background:transparent; border:1px solid transparent; color:var(--color-text,#e8e8f0);
-    padding:.4rem .55rem; border-radius:8px; font-size:.82rem; cursor:pointer; margin-bottom:.25rem;
+    padding:.4rem .55rem; border-radius:8px; font-size:.82rem; cursor:pointer; margin-bottom:0;
   }
   .filter-btn:hover { background:rgba(255,255,255,.05); }
   .filter-btn.active { background:rgba(54,224,255,.12); border-color:rgba(54,224,255,.4); }
@@ -36,28 +36,31 @@
   .topo-bar .stat b { font-size:1.05rem; }
   #topoWrap {
     background:
-      radial-gradient(circle at 18% 18%, rgba(54,224,255,.08), transparent 42%),
-      radial-gradient(circle at 82% 82%, rgba(54,255,158,.07), transparent 42%),
-      #0b0b16;
+      radial-gradient(circle at 14% 0%, rgba(70,130,255,.18), transparent 38%),
+      radial-gradient(circle at 86% 6%, rgba(180,90,255,.14), transparent 40%),
+      radial-gradient(circle at 50% 100%, rgba(0,200,255,.10), transparent 55%),
+      #05060c;
     border:1px solid var(--color-border,#2a2a40);
     border-radius:var(--radius-lg);
     position:relative; overflow:hidden;
   }
-  #topoSvg { width:100%; height:600px; display:block; }
+  #topoSvg { width:100%; height:720px; display:block; }
 
-  #topoSvg .grid { stroke: rgba(255,255,255,.035); stroke-width:1; }
+  #topoSvg .grid { stroke: rgba(120,160,255,.07); stroke-width:1; }
+  #topoSvg .grid-major { stroke: rgba(120,160,255,.12); stroke-width:1; }
+
 
   /* nodes */
   .node-card { cursor:grab; }
   .node-card:active { cursor:grabbing; }
   .node-base {
-    fill: #12121f; stroke-width:1.5;
-    filter: drop-shadow(0 4px 10px rgba(0,0,0,.55));
+    fill: rgba(28,32,54,.92); stroke: rgba(120,150,255,.45); stroke-width:1.5;
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,.65));
   }
   .node-accent { stroke-width:4; }              /* left status bar */
   .node-hex { stroke-width:1.5; }               /* icon hexagon */
-  .node-title { fill:#fff; font-size:13px; font-weight:600; font-family:inherit; }
-  .node-tech  { fill:var(--color-muted); font-size:10.5px; font-family:inherit; }
+  .node-title { fill:#f4f6ff; font-size:13px; font-weight:600; font-family:inherit; }
+  .node-tech  { fill:#9aa6d6; font-size:10.5px; font-family:inherit; }
   .node-pill  { font-size:9.5px; font-weight:700; font-family:inherit; letter-spacing:.04em; }
   .node-metric{ font-size:10.5px; font-family:inherit; }
 
@@ -91,51 +94,49 @@
 {% endblock %}
 
 {% block content %}
-<div class="topo-layout">
-  <!-- FILTER RAIL -->
-  <aside class="topo-filter">
-    <h4>Filter</h4>
-    <button class="filter-btn active" data-filter="all"><span class="dot" style="background:#36e0ff"></span> All <span class="cnt" id="cAll">0</span></button>
-    <button class="filter-btn" data-filter="healthy"><span class="dot" style="background:#36ff9e"></span> Healthy <span class="cnt" id="cHealthy">0</span></button>
-    <button class="filter-btn" data-filter="warning"><span class="dot" style="background:#ffd23f"></span> Warning <span class="cnt" id="cWarning">0</span></button>
-    <button class="filter-btn" data-filter="critical"><span class="dot" style="background:#ff4d6d"></span> Critical <span class="cnt" id="cCritical">0</span></button>
-    <button class="filter-btn" data-filter="idle"><span class="dot" style="background:#7a7a9d"></span> Idle <span class="cnt" id="cIdle">0</span></button>
-    <button class="filter-btn" data-filter="database"><span class="dot" style="background:#b06bff"></span> Database <span class="cnt" id="cDb">0</span></button>
-    <button class="filter-btn" data-filter="service"><span class="dot" style="background:#36e0ff"></span> Service <span class="cnt" id="cSvc">0</span></button>
-  </aside>
+<!-- TOPO CONTROLS (zoom + refresh only) -->
+<div class="topo-filter">
+  <span style="display:flex;gap:.4rem;align-items:center;margin-left:auto">
+    <button class="filter-btn" id="zoomOut" title="Zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+    <button class="filter-btn" id="zoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+    <button class="filter-btn" id="resetView" title="Reset view"><i class="fa-solid fa-rotate-left"></i></button>
+    <button class="filter-btn" id="refreshView" title="Refresh"><i class="fa-solid fa-arrows-rotate"></i></button>
+  </span>
+</div>
 
-  <div class="topo-main">
-    <div class="topo-bar">
-      <span class="stat">Overall: <b id="overall">—</b></span>
-      <span class="stat">Requests (5m): <b id="req5m">0</b></span>
-      <span class="stat badge--info" id="pollState">polling…</span>
-      <span class="stat">Nodes: <b id="nodeCount">0</b></span>
-      <span class="stat" style="color:var(--color-muted)">💡 Seret node untuk menyusun ulang</span>
-    </div>
+<div class="topo-main">
+  <div class="topo-bar">
+    <span class="stat">Overall: <b id="overall">—</b></span>
+    <span class="stat">Requests (5m): <b id="req5m">0</b></span>
+    <span class="stat badge--info" id="pollState">polling…</span>
+    <span class="stat">Nodes: <b id="nodeCount">0</b></span>
+    <span class="stat" style="color:var(--color-muted)">💡 Seret node untuk atur · seret latar untuk pan · scroll untuk zoom</span>
+  </div>
 
-    <div id="topoWrap">
-      <svg id="topoSvg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
-        <defs>
-          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path class="grid" d="M40 0 L0 0 0 40"/>
-          </pattern>
-        </defs>
-        <rect x="0" y="0" width="1000" height="600" fill="url(#grid)"/>
-        <g id="edgesLayer"></g>
-        <g id="nodesLayer"></g>
-      </svg>
-      <div class="node-tooltip" id="tooltip"></div>
-    </div>
+  <div id="topoWrap">
+    <svg id="topoSvg" viewBox="0 0 1180 720" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path class="grid" d="M40 0 L0 0 0 40"/>
+        </pattern>
+      </defs>
+      <rect id="bgRect" x="-5000" y="-5000" width="10000" height="10000" fill="url(#grid)"/>
+      <g id="edgesLayer"></g>
+      <g id="nodesLayer"></g>
+    </svg>
+    <div class="node-tooltip" id="tooltip"></div>
+  </div>
 
-    <div class="legend">
-      <span class="item"><span class="sw" style="background:#36ff9e"></span> Healthy</span>
-      <span class="item"><span class="sw" style="background:#ffd23f"></span> Warning</span>
-      <span class="item"><span class="sw" style="background:#ff4d6d"></span> Critical</span>
-      <span class="item"><span class="sw" style="background:#7a7a9d"></span> Idle</span>
-      <span class="item"><span class="sw" style="background:#b06bff"></span> Database</span>
-      <span class="item"><span class="sw" style="background:#36e0ff"></span> Service / API</span>
-      <span class="item"><i class="fa-solid fa-circle-nodes" style="color:#36e0ff"></i> Animated edge = live traffic</span>
-    </div>
+  <div class="legend">
+    <span class="item"><span class="sw" style="background:#36ff9e"></span> Healthy</span>
+    <span class="item"><span class="sw" style="background:#ffd23f"></span> Warning</span>
+    <span class="item"><span class="sw" style="background:#ff4d6d"></span> Critical</span>
+    <span class="item"><span class="sw" style="background:#7a7a9d"></span> Idle</span>
+    <span class="item"><span class="sw" style="background:#b06bff"></span> Database</span>
+    <span class="item"><span class="sw" style="background:#ff9f43"></span> Redis Cache</span>
+    <span class="item"><span class="sw" style="background:#4dd0e1"></span> Media Storage</span>
+    <span class="item"><span class="sw" style="background:#36e0ff"></span> Service / API</span>
+    <span class="item"><i class="fa-solid fa-circle-nodes" style="color:#36e0ff"></i> Animated edge = live traffic</span>
   </div>
 </div>
 {% endblock %}
@@ -146,7 +147,8 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const COLOR = {
     healthy: "#36ff9e", warning: "#ffd23f", critical: "#ff4d6d",
-    idle: "#7a7a9d", database: "#b06bff", service: "#36e0ff"
+    idle: "#7a7a9d", database: "#b06bff", service: "#36e0ff",
+    cache: "#ff9f43", storage: "#4dd0e1"
   };
   const nodesLayer = document.getElementById("nodesLayer");
   const edgesLayer = document.getElementById("edgesLayer");
@@ -157,8 +159,39 @@
   let edgeState = [];
   let dragId = null, dragOff = { x: 0, y: 0 };
   let activeFilter = "all";
-  const VB_W = 1000, VB_H = 600;
+  const svg = document.getElementById("topoSvg");
+  svg.style.cursor = "grab";
+  let view = { x: 0, y: 0, w: 1180, h: 720 };
+  const VB_W = 1180, VB_H = 720;
+  let panning = false, panStart = null;
 
+  function applyView() {
+    svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+  }
+  applyView();
+
+  let viewInitialized = false;
+  function fitView() {
+    if (viewInitialized) return;   // keep user's pan/zoom after first paint
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const id in nodeState) {
+      if (id === "_modOrder") continue;
+      const n = nodeState[id];
+      if (!n || n.x == null) continue;
+      const hw = 94, hh = 30;
+      minX = Math.min(minX, n.x - hw); maxX = Math.max(maxX, n.x + hw);
+      minY = Math.min(minY, n.y - hh); maxY = Math.max(maxY, n.y + hh);
+    }
+    if (!isFinite(minX)) return;
+    const pad = 40;
+    let w = (maxX - minX) + pad * 2;
+    let h = (maxY - minY) + pad * 2;
+    const aspect = VB_H / VB_W;
+    if (h / w < aspect) h = w * aspect; else w = h / aspect;
+    view = { x: minX - pad, y: minY - pad, w, h };
+    viewInitialized = true;
+    applyView();
+  }
   function el(tag, attrs) {
     const e = document.createElementNS(SVG_NS, tag);
     for (const k in attrs) e.setAttribute(k, attrs[k]);
@@ -167,15 +200,24 @@
 
   function placeNode(n, index, total) {
     if (n._x != null && n._y != null) return { x: n._x, y: n._y };
+    // Fixed anchor layout (Dynatrace-smartscape style):
+    //   infra on the left, the app API in the middle, monitor on the right,
+    //   and the per-module microservices in a flowing grid on the right.
     const CORE = {
-      pg:         { x: 140, y: 140 },
-      apps_api:   { x: 430, y: 330 },
-      monitor:    { x: 760, y: 330 },
-      monitor_db: { x: 920, y: 140 },
+      pg:         { x: 130, y: 110 },
+      redis:      { x: 130, y: 300 },
+      media:      { x: 130, y: 490 },
+      apps_api:   { x: 430, y: 300 },
+      monitor:    { x: 800, y: 230 },
+      monitor_db: { x: 970, y: 110 },
     };
     if (CORE[n.id]) return { x: CORE[n.id].x, y: CORE[n.id].y };
-    const cols = 2, gapX = 260, gapY = 96, x0 = 380, y0 = 80;
-    const col = index % cols, row = Math.floor(index / cols);
+    // module services → flowing grid on the right of the app API
+    const cols = 3, gapX = 230, gapY = 86, x0 = 690, y0 = 470;
+    const order = nodeState._modOrder || [];
+    const idx = order.indexOf(n.id);
+    const i = idx >= 0 ? idx : index;
+    const col = i % cols, row = Math.floor(i / cols);
     return { x: x0 + col * gapX, y: y0 + row * gapY };
   }
 
@@ -198,7 +240,10 @@
 
   function drawNode(n, index, total) {
     const { x, y } = placeNode(n, index, total);
-    const baseColor = n.kind === "database" ? COLOR.database : COLOR.service;
+    const baseColor = ({
+      database: COLOR.database, service: COLOR.service,
+      cache: COLOR.cache, storage: COLOR.storage,
+    })[n.kind] || COLOR.service;
     const statusColor = COLOR[n.status] || baseColor;
     const g = el("g", { class: "node-card", transform: `translate(${x},${y})` });
     g.dataset.id = n.id; g.dataset.kind = n.kind; g.dataset.status = n.status;
@@ -220,7 +265,7 @@
     const hex = el("polygon", { class: "node-hex", points: hexPoints(hx, hy, hr),
       fill: "rgba(255,255,255,.04)", stroke: statusColor });
     const GLYPH = {
-      pg:"🗄️", apps_api:"🛰️", monitor:"📡", monitor_db:"💾",
+      pg:"🗄️", redis:"⚡", media:"📁", apps_api:"🛰️", monitor:"📡", monitor_db:"💾",
       auth:"🔐", users:"👤", roles:"🛡️", medicines:"💊", suppliers:"🚚",
       inventory:"📦", purchasing:"🧾", sales:"🧮", orders:"🛒",
       attendance:"🕒", dashboard:"📊", reports:"📈", audit:"🔍", common:"⚙️",
@@ -248,8 +293,13 @@
     // metric bottom-right
     const metric = el("text", { class: "node-metric", x: w/2 - 10, y: h/2 - 9,
       "text-anchor": "end", fill: statusColor });
-    metric.textContent = n.success_rate != null ? (n.success_rate + "% · " + (n.requests_5m||0) + "r")
-                                                : (n.detail ? n.detail.slice(0,12) : "");
+    let metricTxt = "";
+    if (n.latency_ms != null) metricTxt = n.latency_ms + " ms";
+    else if (n.files != null) metricTxt = (n.files||0) + " files";
+    else if (n.success_rate != null) metricTxt = n.success_rate + "% · " + (n.requests_5m||0) + "r";
+    else if (n.detail) metricTxt = n.detail.slice(0,12);
+    metric.textContent = metricTxt;
+
 
     g.appendChild(ring); g.appendChild(rect); g.appendChild(accent); g.appendChild(hex);
     g.appendChild(icon); g.appendChild(title); g.appendChild(tech);
@@ -262,7 +312,10 @@
       tooltip.style.left = (ev.clientX - r.left + 14) + "px";
       tooltip.style.top = (ev.clientY - r.top + 14) + "px";
       tooltip.innerHTML = `<b>${n.label}</b><br>Type: ${n.kind}<br>Tech: ${n.tech||"—"}` +
-        (n.success_rate != null ? `<br>Health: ${n.success_rate}%<br>Requests/5m: ${n.requests_5m}<br>Avg: ${n.avg_ms} ms` : (n.detail?`<br>${n.detail}`:""));
+        (n.success_rate != null ? `<br>Health: ${n.success_rate}%<br>Requests/5m: ${n.requests_5m}<br>Avg: ${n.avg_ms} ms`
+         : (n.latency_ms != null ? `<br>Latency: ${n.latency_ms} ms<br>DB index: ${n.db_index}`
+            : (n.files != null ? `<br>Files: ${n.files}<br>Path: ${n.path}`
+               : (n.detail?`<br>${n.detail}`:""))));
     });
     g.addEventListener("mouseleave", () => tooltip.style.display = "none");
 
@@ -275,8 +328,8 @@
     g.addEventListener("pointermove", (ev) => {
       if (dragId !== n.id) return;
       const p = clientToSvg(ev);
-      const nx = Math.max(100, Math.min(VB_W - 100, p.x - dragOff.x));
-      const ny = Math.max(34, Math.min(VB_H - 34, p.y - dragOff.y));
+      const nx = p.x - dragOff.x;
+      const ny = p.y - dragOff.y;
       nodeState[n.id].x = nx; nodeState[n.id].y = ny;
       g.setAttribute("transform", `translate(${nx},${ny})`);
       redrawEdges();
@@ -360,12 +413,7 @@
     });
     data.edges.forEach(drawEdge);
     redrawEdges();
-    applyFilter();
-
-    // counts
-    const c = { all: data.nodes.length, healthy:0, warning:0, critical:0, idle:0, database:0, service:0 };
-    data.nodes.forEach(n => { c[n.status] = (c[n.status]||0)+1; c[n.kind] = (c[n.kind]||0)+1; });
-    for (const k in c) { const e = document.getElementById("c"+ (k==="database"?"Db":k==="service"?"Svc":k[0].toUpperCase()+k.slice(1))); if (e) e.textContent = c[k]; }
+    fitView();
 
     document.getElementById("overall").textContent = data.overall_success_rate + "%";
     document.getElementById("overall").style.color =
@@ -373,29 +421,57 @@
       data.overall_success_rate >= 80 ? COLOR.warning : COLOR.critical;
     document.getElementById("req5m").textContent = data.total_requests_5m;
     document.getElementById("nodeCount").textContent = data.nodes.length;
-    document.getElementById("edgeCount").textContent = data.edges.length;
   }
 
-  function applyFilter() {
-    for (const id in nodeState) {
-      if (id === "_modOrder") continue;
-      const n = nodeState[id];
-      if (!n.g) continue;
-      n.g.style.display = matchesFilter(n) ? "" : "none";
-    }
-  }
+  window.addEventListener("pointerup", () => { dragId = null; panning = false; svg.style.cursor = "grab"; });
 
-  // filter buttons
-  document.querySelectorAll(".filter-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      activeFilter = btn.dataset.filter;
-      applyFilter();
-    });
+  // ── Canvas panning (drag empty background) ──────────────────────────
+  svg.addEventListener("pointerdown", (ev) => {
+    if (dragId) return;                 // a node is being dragged
+    panning = true; panStart = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y };
+    svg.style.cursor = "grabbing";
+    svg.setPointerCapture(ev.pointerId);
   });
+  svg.addEventListener("pointermove", (ev) => {
+    if (!panning) return;
+    const rect = svg.getBoundingClientRect();
+    const dx = (ev.clientX - panStart.x) / rect.width * view.w;
+    const dy = (ev.clientY - panStart.y) / rect.height * view.h;
+    view.x = panStart.vx - dx;
+    view.y = panStart.vy - dy;
+    applyView();
+  });
+  svg.addEventListener("pointerup", () => { panning = false; svg.style.cursor = "grab"; });
 
-  window.addEventListener("pointerup", () => { dragId = null; });
+  // ── Wheel zoom (toward cursor) ─────────────────────────────────────
+  svg.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    const mx = (ev.clientX - rect.left) / rect.width * view.w + view.x;
+    const my = (ev.clientY - rect.top) / rect.height * view.h + view.y;
+    const factor = ev.deltaY > 0 ? 1.12 : 0.89;
+    let nw = Math.max(200, Math.min(4000, view.w * factor));
+    let nh = nw * (VB_H / VB_W);
+    view.x = mx - (mx - view.x) * (nw / view.w);
+    view.y = my - (my - view.y) * (nh / view.h);
+    view.w = nw; view.h = nh;
+    applyView();
+  }, { passive: false });
+
+  // ── Zoom / reset buttons ───────────────────────────────────────────
+  function zoomBy(factor) {
+    const mx = view.x + view.w / 2, my = view.y + view.h / 2;
+    let nw = Math.max(200, Math.min(4000, view.w * factor));
+    let nh = nw * (VB_H / VB_W);
+    view.x = mx - nw / 2; view.y = my - nh / 2; view.w = nw; view.h = nh;
+    applyView();
+  }
+  document.getElementById("zoomIn").addEventListener("click", () => zoomBy(0.85));
+  document.getElementById("zoomOut").addEventListener("click", () => zoomBy(1.18));
+  document.getElementById("resetView").addEventListener("click", () => {
+    view = { x: 0, y: 0, w: VB_W, h: VB_H }; applyView();
+    viewInitialized = false; fitView();
+  });
 
   let first = true;
   async function tick() {
