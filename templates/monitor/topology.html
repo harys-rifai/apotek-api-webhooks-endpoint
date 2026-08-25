@@ -158,7 +158,6 @@
   let nodeState = {};
   let edgeState = [];
   let dragId = null, dragOff = { x: 0, y: 0 };
-  let activeFilter = "all";
   const svg = document.getElementById("topoSvg");
   svg.style.cursor = "grab";
   let view = { x: 0, y: 0, w: 1180, h: 720 };
@@ -388,12 +387,6 @@
     requestAnimationFrame(animate);
   }
 
-  function matchesFilter(n) {
-    if (activeFilter === "all") return true;
-    if (activeFilter === "database" || activeFilter === "service") return n.kind === activeFilter;
-    return n.status === activeFilter;
-  }
-
   function render(data) {
     const modNodes = data.nodes.filter(n => n.id.startsWith("svc_"));
     nodeState._modOrder = modNodes.map(n => n.id);
@@ -471,6 +464,10 @@
   document.getElementById("resetView").addEventListener("click", () => {
     view = { x: 0, y: 0, w: VB_W, h: VB_H }; applyView();
     viewInitialized = false; fitView();
+  });
+  document.getElementById("refreshView").addEventListener("click", async () => {
+    viewInitialized = false;          // allow re-fit so all nodes stay visible
+    await tick();
   });
 
   let first = true;

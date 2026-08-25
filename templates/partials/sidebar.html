@@ -1,60 +1,57 @@
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar__brand">
-    <div class="sidebar__logo">⚕</div>
-    <span class="sidebar__title">ApotekMonitor</span>
-  </div>
+<!-- MacBook-style bottom dock navigation -->
+<nav class="dock" id="dock">
+  <a href="{% url 'dashboard' %}" class="dock__item {% if active_menu == 'dashboard' %}active{% endif %}" data-tip="Dashboard">
+    <i class="fa-solid fa-chart-line"></i>
+  </a>
+  <a href="{% url 'endpoint_list' %}" class="dock__item {% if active_menu == 'endpoints' %}active{% endif %}" data-tip="Endpoints">
+    <i class="fa-solid fa-plug"></i>
+  </a>
+  <a href="{% url 'log_list' %}" class="dock__item {% if active_menu == 'logs' %}active{% endif %}" data-tip="Request Logs">
+    <i class="fa-solid fa-list"></i>
+  </a>
+  <a href="{% url 'webhook_list' %}" class="dock__item {% if active_menu == 'webhooks' %}active{% endif %}" data-tip="Webhooks">
+    <i class="fa-solid fa-bell"></i>
+  </a>
+  <a href="{% url 'architecture' %}" class="dock__item {% if active_menu == 'architecture' %}active{% endif %}" data-tip="Architecture">
+    <i class="fa-solid fa-diagram-project"></i>
+  </a>
+  <a href="{% url 'topology' %}" class="dock__item {% if active_menu == 'topology' %}active{% endif %}" data-tip="Topology">
+    <i class="fa-solid fa-network-wired"></i>
+  </a>
+  <a href="{% url 'delivery_list' %}" class="dock__item {% if active_menu == 'deliveries' %}active{% endif %}" data-tip="Pengantaran Obat">
+    <i class="fa-solid fa-truck-medical"></i>
+  </a>
 
-  <nav class="sidebar__nav">
-    <div class="nav-section">Monitor</div>
+  <span class="dock__sep"></span>
 
-    <a href="{% url 'dashboard' %}" class="sidebar__item {% if active_menu == 'dashboard' %}active{% endif %}">
-      <i class="fa-solid fa-chart-line sidebar__icon"></i>
-      <span>Dashboard</span>
-    </a>
-    <a href="{% url 'endpoint_list' %}" class="sidebar__item {% if active_menu == 'endpoints' %}active{% endif %}">
-      <i class="fa-solid fa-plug sidebar__icon"></i>
-      <span>Endpoints</span>
-    </a>
-    <a href="{% url 'log_list' %}" class="sidebar__item {% if active_menu == 'logs' %}active{% endif %}">
-      <i class="fa-solid fa-list sidebar__icon"></i>
-      <span>Request Logs</span>
-    </a>
-    <a href="{% url 'webhook_list' %}" class="sidebar__item {% if active_menu == 'webhooks' %}active{% endif %}">
-      <i class="fa-solid fa-bell sidebar__icon"></i>
-      <span>Webhooks</span>
-    </a>
-    <a href="{% url 'architecture' %}" class="sidebar__item {% if active_menu == 'architecture' %}active{% endif %}">
-      <i class="fa-solid fa-diagram-project sidebar__icon"></i>
-      <span>Architecture</span>
-    </a>
-    <a href="{% url 'topology' %}" class="sidebar__item {% if active_menu == 'topology' %}active{% endif %}">
-      <i class="fa-solid fa-network-wired sidebar__icon"></i>
-      <span>Topology</span>
-    </a>
-    <a href="{% url 'delivery_list' %}" class="sidebar__item {% if active_menu == 'deliveries' %}active{% endif %}">
-      <i class="fa-solid fa-truck-medical sidebar__icon"></i>
-      <span>Pengantaran Obat</span>
-    </a>
+  <a href="/admin/" class="dock__item" target="_blank" data-tip="Django Admin">
+    <i class="fa-solid fa-gear"></i>
+  </a>
 
-    <div class="sidebar__divider"></div>
+  <form method="post" action="{% url 'logout' %}" class="dock__form">
+    {% csrf_token %}
+    <button type="submit" class="dock__item dock__item--danger" data-tip="Logout">
+      <i class="fa-solid fa-right-from-bracket"></i>
+    </button>
+  </form>
+</nav>
 
-    <div class="nav-section">System</div>
-
-    <a href="/admin/" class="sidebar__item" target="_blank">
-      <i class="fa-solid fa-gear sidebar__icon"></i>
-      <span>Django Admin</span>
-    </a>
-
-    <form method="post" action="{% url 'logout' %}" style="margin:0">
-      {% csrf_token %}
-      <button type="submit" class="sidebar__item sidebar__item--danger">
-        <i class="fa-solid fa-right-from-bracket sidebar__icon"></i>
-        <span>Logout</span>
-      </button>
-    </form>
-  </nav>
-
-  <div class="sidebar__footer">
-    v1.0 &nbsp;·&nbsp; port 8090
-  </div>
-</aside>
+<script>
+(function () {
+  const dock = document.getElementById("dock");
+  if (!dock) return;
+  const items = Array.from(dock.querySelectorAll(".dock__item"));
+  function reset() { items.forEach(it => { it.style.setProperty("--mag", "1"); it.style.zIndex = ""; }); }
+  items.forEach((it, i) => {
+    it.addEventListener("mouseenter", () => {
+      items.forEach((o, j) => {
+        const d = Math.abs(i - j);
+        const s = d === 0 ? 1.55 : d === 1 ? 1.28 : d === 2 ? 1.12 : 1;
+        o.style.setProperty("--mag", s);
+        o.style.zIndex = String(100 - d);
+      });
+    });
+  });
+  dock.addEventListener("mouseleave", reset);
+})();
+</script>

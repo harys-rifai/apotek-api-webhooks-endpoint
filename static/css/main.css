@@ -2,106 +2,107 @@
    ApotekMonitor — main.css  (komponen tambahan di atas theme.css)
    ============================================================ */
 
-/* ── Sidebar brand & nav (tidak ada di theme.css ApotekApps) ── */
-.sidebar__brand {
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--border-color);
+/* ── MacBook Air-style bottom dock ──────────────────────────── */
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 200;
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 7px 11px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .10);
+  border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .45),
+              inset 0 1px 0 rgba(255, 255, 255, .35),
+              inset 0 -1px 0 rgba(0, 0, 0, .15);
+  backdrop-filter: blur(26px) saturate(160%);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
 }
 
-.sidebar__logo {
-  width: 38px; height: 38px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-magenta));
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px; color: #fff; font-weight: 700;
-  box-shadow: 0 0 20px var(--neon-cyan-glow);
-  flex-shrink: 0;
-}
-
-.sidebar__title {
-  font-size: 1rem;
-  font-weight: 700;
-  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.sidebar__nav {
-  flex: 1;
-  padding: 10px 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Alias .sidebar__item → .nav-item dari theme.css */
-.sidebar__item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
-  color: var(--text-secondary);
-  font-size: .875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition);
-  border-left: 3px solid transparent;
-  text-decoration: none;
+.dock__item {
   position: relative;
-  background: none;
-  border-top: none; border-right: none; border-bottom: none;
-  width: 100%;
-  font-family: var(--font-main);
-  text-align: left;
-  line-height: 1.4;
-}
-
-.sidebar__item:hover {
-  background: var(--neon-cyan-dim);
-  color: var(--neon-cyan);
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e8ecff;
+  font-size: 1.2rem;
   text-decoration: none;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .10);
+  transform: translateY(calc((var(--mag, 1) - 1) * -16px)) scale(var(--mag, 1));
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1),
+              background .2s, color .2s, box-shadow .2s, border-color .2s;
+  transform-origin: bottom center;
+}
+.dock__item:hover {
+  background: var(--neon-cyan-dim, rgba(54, 224, 255, .22));
+  color: var(--neon-cyan, #36e0ff);
+  border-color: rgba(54, 224, 255, .55);
+  box-shadow: 0 0 20px var(--neon-cyan-glow, rgba(54, 224, 255, .5));
+}
+.dock__item.active {
+  background: var(--neon-cyan-dim, rgba(54, 224, 255, .20));
+  color: var(--neon-cyan, #36e0ff);
+  border-color: rgba(54, 224, 255, .5);
+  box-shadow: 0 0 16px var(--neon-cyan-glow, rgba(54, 224, 255, .4));
+}
+.dock__item--danger:hover {
+  background: var(--neon-red-dim, rgba(255, 77, 109, .22));
+  color: var(--neon-red, #ff4d6d);
+  border-color: rgba(255, 77, 109, .55);
+  box-shadow: 0 0 20px rgba(255, 77, 109, .5);
+}
+.dock__item i { pointer-events: none; }
+
+.dock__sep {
+  width: 1px;
+  height: 36px;
+  margin: 0 5px;
+  align-self: center;
+  background: rgba(255, 255, 255, .22);
 }
 
-.sidebar__item.active {
-  background: var(--neon-cyan-dim);
-  color: var(--neon-cyan);
-  border-left-color: var(--neon-cyan);
-  font-weight: 600;
-}
+.dock__form { margin: 0; display: flex; }
 
-.sidebar__item.active::before {
-  content: '';
+/* tooltip label */
+.dock__item::after {
+  content: attr(data-tip);
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--neon-cyan);
-  box-shadow: 0 0 10px var(--neon-cyan-glow);
-}
-
-.sidebar__item--danger:hover {
-  background: var(--neon-red-dim);
-  color: var(--neon-red);
-}
-
-.sidebar__icon { font-size: 1.1rem; width: 22px; text-align: center; flex-shrink: 0; }
-
-.sidebar__divider {
-  height: 1px;
-  background: var(--border-color);
-  margin: 6px 20px;
-}
-
-.sidebar__footer {
-  padding: 12px 20px;
+  bottom: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%) translateY(6px) scale(.96);
+  background: rgba(12, 12, 24, .96);
+  color: #fff;
   font-size: .72rem;
-  color: var(--text-muted);
-  border-top: 1px solid var(--border-color);
+  font-family: var(--font-main, sans-serif);
+  white-space: nowrap;
+  padding: .32rem .6rem;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease, transform .16s ease;
+}
+.dock__item:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
 }
 
-/* ── Navbar (topbar alias) ───────────────────────────────────── */
+@media (max-width: 560px) {
+  .dock { gap: 2px; padding: 6px 8px; bottom: 8px; }
+  .dock__item { width: 42px; height: 42px; font-size: 1.05rem; }
+  .dock__sep { height: 30px; margin: 0 3px; }
+}
+
+/* ── Navbar (minimal top bar, no menu — nav lives in bottom dock) ── */
 .navbar {
   height: var(--topbar-height);
   background: var(--bg-topbar);
@@ -109,6 +110,7 @@
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 24px;
   gap: 12px;
   position: sticky;
@@ -116,20 +118,17 @@
   z-index: 50;
 }
 
-.navbar__toggle {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  width: 36px; height: 36px;
-  border-radius: var(--radius-md);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem; cursor: pointer; transition: all var(--transition);
-  flex-shrink: 0;
+.navbar__brand {
+  display: flex; align-items: center; gap: 10px;
 }
-.navbar__toggle:hover { border-color: var(--neon-cyan); color: var(--neon-cyan); box-shadow: var(--shadow-neon); }
-
-.navbar__center { flex: 1; }
-.navbar__title  { font-size: 1rem; font-weight: 700; }
+.navbar__logo {
+  width: 30px; height: 30px; border-radius: 9px;
+  background: linear-gradient(135deg, var(--neon-cyan), var(--neon-magenta));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; color: #fff; font-weight: 700;
+  box-shadow: 0 0 16px var(--neon-cyan-glow, rgba(54,224,255,.4));
+}
+.navbar__title { font-size: 1rem; font-weight: 700; letter-spacing: .02em; }
 
 .navbar__right {
   display: flex; align-items: center; gap: 14px;

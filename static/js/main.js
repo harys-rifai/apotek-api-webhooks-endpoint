@@ -13,21 +13,6 @@ if (clockEl) {
   setInterval(tick, 1000);
 }
 
-// ── Sidebar toggle ────────────────────────────────────────────
-const toggleBtn = document.getElementById("sidebarToggle");
-const sidebar   = document.getElementById("sidebar");
-const wrapper   = document.querySelector(".main-wrapper");
-if (toggleBtn && sidebar) {
-  toggleBtn.addEventListener("click", () => {
-    sidebar.classList.toggle("open");
-    // on desktop collapse by shifting wrapper
-    if (window.innerWidth > 768) {
-      const collapsed = sidebar.classList.toggle("sidebar--collapsed");
-      if (wrapper) wrapper.style.marginLeft = collapsed ? "0" : "var(--sidebar-width)";
-    }
-  });
-}
-
 // ── Toast helper ──────────────────────────────────────────────
 window.showToast = function(msg, type = "success") {
   const container = document.getElementById("toastContainer");
