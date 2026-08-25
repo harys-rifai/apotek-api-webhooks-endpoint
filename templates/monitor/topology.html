@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Topology — ApotekMonitor{% endblock %}
+{% block title %}Topology — OrchestrationApps{% endblock %}
 {% block page_title %}Topology · Smartscape{% endblock %}
 
 {% block extra_head %}
@@ -159,9 +159,11 @@
   // ── Monitoring notifications (status-change alerts) ──────────
   let prevStatus = {};        // id → previous status string
   let firstRender = true;
+  const NOTIFY_COOLDOWN_MS = 15000;   // ignore rapid flip-flops per node
+  let notifyAt = {};                   // id → last notification timestamp
   const LABELS = {
     pg: "PostgreSQL", redis: "Redis Cache", media: "Media Storage",
-    apps_api: "ApotekApps REST API", monitor: "ApotekMonitor", monitor_db: "Monitor SQLite",
+    apps_api: "ApotekApps REST API", monitor: "OrchestrationApps", monitor_db: "Monitor SQLite",
   };
   function nodeLabel(n) {
     return n.label || LABELS[n.id] || n.id;
@@ -196,6 +198,7 @@
         if (c.status === "critical") {
           showToast(`<b>${c.label}</b> is CRITICAL on topology`, "error");
           recordAlert("critical", `${c.label} CRITICAL`, "Node berstatus critical saat pantauan dimulai.");
+          notifyAt[id] = Date.now();
         }
       });
       prevStatus = current;
@@ -203,11 +206,15 @@
       return;
     }
 
+    const now = Date.now();
     Object.entries(current).forEach(([id, c]) => {
       const prev = prevStatus[id];
       if (!prev || prev.status === c.status) return;
-      const level = statusToLevel(c.status);
-      const prevLevel = statusToLevel(prev.status);
+      // ignore idle<->healthy jitter (no real incident) for notifications
+      if (c.status === "idle" || prev.status === "idle") return;
+      // debounce rapid flip-flops on the same node
+      if (notifyAt[id] && (now - notifyAt[id]) < NOTIFY_COOLDOWN_MS) return;
+
       if (c.status === "critical") {
         showToast(`<b>${c.label}</b> became CRITICAL`, "error");
         recordAlert("critical", `${c.label} CRITICAL`, "Status berubah menjadi critical.");
@@ -218,6 +225,7 @@
         showToast(`<b>${c.label}</b> recovered → healthy`, "success");
         recordAlert("success", `${c.label} recovered`, "Status kembali sehat.");
       }
+      notifyAt[id] = now;
     });
     prevStatus = current;
   }

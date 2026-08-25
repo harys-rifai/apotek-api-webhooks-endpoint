@@ -789,7 +789,7 @@ def api_topology_json(request):
         "detail": f"DB: {db_status} · Redis: {redis_status} · Media: {media_status}",
     })
     nodes.append({
-        "id": "monitor", "label": "ApotekMonitor", "kind": "service",
+        "id": "monitor", "label": "OrchestrationApps", "kind": "service",
         "tech": "Django :8090", "status": "healthy",
     })
     nodes.append({
