@@ -11,9 +11,9 @@
   z-index: 200;
   display: flex;
   align-items: flex-end;
-  gap: 4px;
-  padding: 7px 11px;
-  border-radius: 24px;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 26px;
   background: rgba(255, 255, 255, .10);
   border: 1px solid rgba(255, 255, 255, .18);
   box-shadow: 0 10px 34px rgba(0, 0, 0, .45),
@@ -23,48 +23,66 @@
   -webkit-backdrop-filter: blur(26px) saturate(160%);
 }
 
+/* each item is a reserved slot so the scaled tile never overlaps neighbours.
+   The slot width + side margins grow with --mag so icons spread apart like macOS. */
 .dock__item {
+  --mag: 1;
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: calc(60px + (var(--mag) - 1) * 26px);
+  height: 58px;
+  margin: 0 calc((var(--mag) - 1) * 8px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  text-decoration: none;
+  background: none;
+  border: none;
+  transition: width .26s cubic-bezier(.34, 1.56, .64, 1),
+              margin .26s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.dock__tile {
+  width: 46px;
+  height: 46px;
   border-radius: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #e8ecff;
   font-size: 1.2rem;
-  text-decoration: none;
   background: rgba(255, 255, 255, .08);
   border: 1px solid rgba(255, 255, 255, .10);
-  transform: translateY(calc((var(--mag, 1) - 1) * -16px)) scale(var(--mag, 1));
-  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1),
-              background .2s, color .2s, box-shadow .2s, border-color .2s;
+  transform: translateY(calc((var(--mag) - 1) * -18px)) scale(var(--mag));
   transform-origin: bottom center;
+  transition: transform .26s cubic-bezier(.34, 1.56, .64, 1),
+              background .2s, color .2s, box-shadow .2s, border-color .2s;
+  will-change: transform;
 }
-.dock__item:hover {
+
+.dock__item:hover .dock__tile {
   background: var(--neon-cyan-dim, rgba(54, 224, 255, .22));
   color: var(--neon-cyan, #36e0ff);
   border-color: rgba(54, 224, 255, .55);
   box-shadow: 0 0 20px var(--neon-cyan-glow, rgba(54, 224, 255, .5));
 }
-.dock__item.active {
+.dock__item.active .dock__tile {
   background: var(--neon-cyan-dim, rgba(54, 224, 255, .20));
   color: var(--neon-cyan, #36e0ff);
   border-color: rgba(54, 224, 255, .5);
   box-shadow: 0 0 16px var(--neon-cyan-glow, rgba(54, 224, 255, .4));
 }
-.dock__item--danger:hover {
+.dock__item--danger:hover .dock__tile {
   background: var(--neon-red-dim, rgba(255, 77, 109, .22));
   color: var(--neon-red, #ff4d6d);
   border-color: rgba(255, 77, 109, .55);
   box-shadow: 0 0 20px rgba(255, 77, 109, .5);
 }
-.dock__item i { pointer-events: none; }
+.dock__tile i { pointer-events: none; }
 
 .dock__sep {
   width: 1px;
-  height: 36px;
-  margin: 0 5px;
+  height: 38px;
+  margin: 0 6px;
   align-self: center;
   background: rgba(255, 255, 255, .22);
 }
@@ -75,7 +93,7 @@
 .dock__item::after {
   content: attr(data-tip);
   position: absolute;
-  bottom: calc(100% + 14px);
+  bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%) translateY(6px) scale(.96);
   background: rgba(12, 12, 24, .96);
@@ -96,10 +114,11 @@
   transform: translateX(-50%) translateY(0) scale(1);
 }
 
-@media (max-width: 560px) {
-  .dock { gap: 2px; padding: 6px 8px; bottom: 8px; }
-  .dock__item { width: 42px; height: 42px; font-size: 1.05rem; }
-  .dock__sep { height: 30px; margin: 0 3px; }
+@media (max-width: 620px) {
+  .dock { gap: 0; padding: 6px 8px; bottom: 8px; }
+  .dock__item { width: 52px; height: 52px; }
+  .dock__tile { width: 40px; height: 40px; font-size: 1.05rem; border-radius: 12px; }
+  .dock__sep { height: 32px; margin: 0 3px; }
 }
 
 /* ── Navbar (minimal top bar, no menu — nav lives in bottom dock) ── */

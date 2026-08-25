@@ -143,12 +143,6 @@ def webhook_list(request):
 
 
 @login_required
-def architecture_view(request):
-    context = {"active_menu": "architecture"}
-    return render(request, "monitor/architecture.html", context)
-
-
-@login_required
 def delivery_list(request):
     """Pantau pengantaran obat dari ApotekApps (/deliveries/)."""
     deliveries = []
@@ -276,12 +270,26 @@ def api_stats_json(request):
 
 @login_required
 def api_activity_json(request):
-    """Return recent activity so the architecture diagram can animate in realtime."""
+    """Return recent activity so the topology smartscape can animate in realtime."""
     last_log = APIRequestLog.objects.order_by("-created_at").first()
     last_wh = WebhookEvent.objects.order_by("-received_at").first()
     since = timezone.now() - timedelta(seconds=10)
     recent_logs = APIRequestLog.objects.filter(created_at__gte=since).count()
     recent_wh = WebhookEvent.objects.filter(received_at__gte=since).count()
+
+    # real infra health (same probes used by the topology smartscape)
+    pg_status, pg_detail = _probe_apotek_db()
+    redis_status, redis_detail, redis_meta = _probe_redis()
+    media_status, media_detail, media_meta = _probe_media()
+
+    # real throughput for the ApotekApps -> Monitor flow (last 5 min)
+    m5 = timezone.now() - timedelta(minutes=5)
+    flow_q = APIRequestLog.objects.filter(created_at__gte=m5)
+    flow_total = flow_q.count()
+    flow_succ = flow_q.filter(status="success").count()
+    flow_avg = flow_q.aggregate(a=Avg("response_time_ms"))["a"] or 0
+    flow_rate = round(flow_succ / flow_total * 100, 1) if flow_total else 100
+
     return JsonResponse({
         "last_log_at": last_log.created_at.isoformat() if last_log else None,
         "last_log_status": last_log.status if last_log else None,
@@ -292,6 +300,17 @@ def api_activity_json(request):
         "recent_wh_10s": recent_wh,
         "total_logs": APIRequestLog.objects.count(),
         "total_wh": WebhookEvent.objects.count(),
+        "infra": {
+            "postgres": {"status": pg_status, "detail": pg_detail},
+            "redis": {"status": redis_status, "detail": redis_detail, **redis_meta},
+            "media": {"status": media_status, "detail": media_detail, **media_meta},
+        },
+        "flow": {
+            "requests_5m": flow_total,
+            "success_rate": flow_rate,
+            "avg_ms": round(flow_avg, 1),
+            "per_sec": round(flow_total / 300, 2),
+        },
         "server_time": timezone.now().isoformat(),
     })
 

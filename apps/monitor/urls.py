@@ -7,7 +7,7 @@ urlpatterns = [
     path("endpoints/<int:pk>/", views.endpoint_detail, name="endpoint_detail"),
     path("logs/", views.log_list, name="log_list"),
     path("webhooks/", views.webhook_list, name="webhook_list"),
-    path("architecture/", views.architecture_view, name="architecture"),
+
     path("topology/", views.topology_view, name="topology"),
     path("deliveries/", views.delivery_list, name="delivery_list"),
     # AJAX / API

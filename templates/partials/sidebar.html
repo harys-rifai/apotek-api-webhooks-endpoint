@@ -1,37 +1,34 @@
 <!-- MacBook-style bottom dock navigation -->
 <nav class="dock" id="dock">
   <a href="{% url 'dashboard' %}" class="dock__item {% if active_menu == 'dashboard' %}active{% endif %}" data-tip="Dashboard">
-    <i class="fa-solid fa-chart-line"></i>
+    <span class="dock__tile"><i class="fa-solid fa-chart-line"></i></span>
   </a>
   <a href="{% url 'endpoint_list' %}" class="dock__item {% if active_menu == 'endpoints' %}active{% endif %}" data-tip="Endpoints">
-    <i class="fa-solid fa-plug"></i>
+    <span class="dock__tile"><i class="fa-solid fa-plug"></i></span>
   </a>
   <a href="{% url 'log_list' %}" class="dock__item {% if active_menu == 'logs' %}active{% endif %}" data-tip="Request Logs">
-    <i class="fa-solid fa-list"></i>
+    <span class="dock__tile"><i class="fa-solid fa-list"></i></span>
   </a>
   <a href="{% url 'webhook_list' %}" class="dock__item {% if active_menu == 'webhooks' %}active{% endif %}" data-tip="Webhooks">
-    <i class="fa-solid fa-bell"></i>
-  </a>
-  <a href="{% url 'architecture' %}" class="dock__item {% if active_menu == 'architecture' %}active{% endif %}" data-tip="Architecture">
-    <i class="fa-solid fa-diagram-project"></i>
+    <span class="dock__tile"><i class="fa-solid fa-bell"></i></span>
   </a>
   <a href="{% url 'topology' %}" class="dock__item {% if active_menu == 'topology' %}active{% endif %}" data-tip="Topology">
-    <i class="fa-solid fa-network-wired"></i>
+    <span class="dock__tile"><i class="fa-solid fa-network-wired"></i></span>
   </a>
   <a href="{% url 'delivery_list' %}" class="dock__item {% if active_menu == 'deliveries' %}active{% endif %}" data-tip="Pengantaran Obat">
-    <i class="fa-solid fa-truck-medical"></i>
+    <span class="dock__tile"><i class="fa-solid fa-truck-medical"></i></span>
   </a>
 
   <span class="dock__sep"></span>
 
   <a href="/admin/" class="dock__item" target="_blank" data-tip="Django Admin">
-    <i class="fa-solid fa-gear"></i>
+    <span class="dock__tile"><i class="fa-solid fa-gear"></i></span>
   </a>
 
   <form method="post" action="{% url 'logout' %}" class="dock__form">
     {% csrf_token %}
     <button type="submit" class="dock__item dock__item--danger" data-tip="Logout">
-      <i class="fa-solid fa-right-from-bracket"></i>
+      <span class="dock__tile"><i class="fa-solid fa-right-from-bracket"></i></span>
     </button>
   </form>
 </nav>
@@ -41,14 +38,13 @@
   const dock = document.getElementById("dock");
   if (!dock) return;
   const items = Array.from(dock.querySelectorAll(".dock__item"));
-  function reset() { items.forEach(it => { it.style.setProperty("--mag", "1"); it.style.zIndex = ""; }); }
+  function reset() { items.forEach(it => it.style.setProperty("--mag", "1")); }
   items.forEach((it, i) => {
     it.addEventListener("mouseenter", () => {
       items.forEach((o, j) => {
         const d = Math.abs(i - j);
-        const s = d === 0 ? 1.55 : d === 1 ? 1.28 : d === 2 ? 1.12 : 1;
+        const s = d === 0 ? 1.6 : d === 1 ? 1.32 : d === 2 ? 1.15 : 1;
         o.style.setProperty("--mag", s);
-        o.style.zIndex = String(100 - d);
       });
     });
   });
