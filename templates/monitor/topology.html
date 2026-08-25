@@ -131,6 +131,7 @@
     <span class="item"><span class="sw" style="background:#36e0ff"></span> Service / API</span>
     <span class="item"><span class="sw" style="background:#9b8cff"></span> Python Runtime</span>
     <span class="item"><span class="sw" style="background:#36e0ff"></span> Nginx Proxy</span>
+    <span class="item"><span class="sw" style="background:#f6c945"></span> System Host</span>
     <span class="item"><i class="fa-solid fa-circle-nodes" style="color:#36e0ff"></i> Animated edge = live traffic</span>
   </div>
 </div>
@@ -143,7 +144,8 @@
   const COLOR = {
     healthy: "#36ff9e", warning: "#ffd23f", critical: "#ff4d6d",
     idle: "#7a7a9d", database: "#b06bff", service: "#36e0ff",
-    cache: "#ff9f43", storage: "#4dd0e1", runtime: "#9b8cff", proxy: "#36e0ff"
+    cache: "#ff9f43", storage: "#4dd0e1", runtime: "#9b8cff", proxy: "#36e0ff",
+    system: "#f6c945"
   };
   const nodesLayer = document.getElementById("nodesLayer");
   const edgesLayer = document.getElementById("edgesLayer");
@@ -269,6 +271,7 @@
     //   and the per-module microservices in a flowing grid on the right.
     const CORE = {
       python:     { x: 130, y: 20 },
+      system:     { x: 130, y: -170 },
       pg:         { x: 130, y: 200 },
       redis:      { x: 130, y: 390 },
       media:      { x: 130, y: 580 },
@@ -309,7 +312,7 @@
     const baseColor = ({
       database: COLOR.database, service: COLOR.service,
       cache: COLOR.cache, storage: COLOR.storage,
-      runtime: COLOR.runtime, proxy: COLOR.proxy,
+      runtime: COLOR.runtime, proxy: COLOR.proxy, system: COLOR.system,
     })[n.kind] || COLOR.service;
     const statusColor = COLOR[n.status] || baseColor;
     const g = el("g", { class: "node-card", transform: `translate(${x},${y})` });
@@ -333,7 +336,7 @@
       fill: "rgba(255,255,255,.04)", stroke: statusColor });
     const GLYPH = {
       pg:"🗄️", redis:"⚡", media:"📁", apps_api:"🛰️", monitor:"📡", monitor_db:"💾",
-      nginx:"🌐", python:"🐍",
+      nginx:"🌐", python:"🐍", system:"🖥️",
       auth:"🔐", users:"👤", roles:"🛡️", medicines:"💊", suppliers:"🚚",
       inventory:"📦", purchasing:"🧾", sales:"🧮", orders:"🛒",
       attendance:"🕒", dashboard:"📊", reports:"📈", audit:"🔍", common:"⚙️",
@@ -366,6 +369,9 @@
     if (n.latency_ms != null) metricTxt = n.latency_ms + " ms";
     else if (n.files != null) metricTxt = (n.files||0) + " files";
     else if (n.success_rate != null) metricTxt = n.success_rate + "% · " + (n.requests_5m||0) + "r";
+    else if (n.kind === "system") {
+      metricTxt = `D${n.disk_pct ?? "?"}% M${n.mem_pct ?? "?"}% L${n.load_pct ?? "?"}%`;
+    }
     else if (n.detail) metricTxt = n.detail.slice(0,14);
     metric.textContent = metricTxt;
 
@@ -384,7 +390,8 @@
         (n.success_rate != null ? `<br>Health: ${n.success_rate}%<br>Requests/5m: ${n.requests_5m}<br>Avg: ${n.avg_ms} ms`
          : (n.latency_ms != null ? `<br>Latency: ${n.latency_ms} ms<br>DB index: ${n.db_index}`
             : (n.files != null ? `<br>Files: ${n.files}<br>Path: ${n.path}`
-               : (n.detail?`<br>${n.detail}`:""))));
+               : (n.kind === "system" ? `<br>Disk: ${n.disk_pct ?? "?"}%<br>Memory: ${n.mem_pct ?? "?"}%<br>Load: ${n.load_pct ?? "?"}%`
+                  : (n.detail?`<br>${n.detail}`:"")))));
     });
     g.addEventListener("mouseleave", () => tooltip.style.display = "none");
 

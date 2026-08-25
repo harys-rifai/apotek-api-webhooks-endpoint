@@ -701,11 +701,18 @@ def _probe_system():
         return "healthy"
 
     worst = "healthy"
-    for p in (disk_pct, mem_pct, load_pct):
+    for p in (disk_pct, mem_pct):
         lv = level(p)
         if lv == "critical":
             worst = "critical"
         elif lv == "warning" and worst != "critical":
+            worst = "warning"
+    # Load average is not pure CPU and macOS inflates it; use lenient bar:
+    # warning >= 1.0/core (100%), critical >= 1.5/core (150%)
+    if load_pct is not None:
+        if load_pct >= 150:
+            worst = "critical"
+        elif load_pct >= 100 and worst != "critical":
             worst = "warning"
 
     parts = []
@@ -728,6 +735,7 @@ def api_topology_json(request):
     media_status, media_detail, media_meta = _probe_media()
     nginx_status, nginx_detail, nginx_meta = _probe_nginx()
     python_status, python_detail, python_meta = _probe_python()
+    system_status, system_detail, system_meta = _probe_system()
 
     # Build nodes from monitored endpoints (grouped by module = service)
     eps = APIEndpoint.objects.filter(is_active=True)
@@ -801,6 +809,14 @@ def api_topology_json(request):
         "tech": "Reverse Proxy", "status": nginx_status, "detail": nginx_detail,
         "port_80": nginx_meta.get("port_80"), "port_443": nginx_meta.get("port_443"),
     })
+    nodes.append({
+        "id": "system", "label": "System Host", "kind": "system",
+        "tech": f"{system_meta.get('platform','')} · {system_meta.get('hostname','')}",
+        "status": system_status, "detail": system_detail,
+        "disk_pct": (system_meta.get("disk") or {}).get("pct"),
+        "mem_pct": (system_meta.get("mem") or {}).get("pct"),
+        "load_pct": (system_meta.get("load") or {}).get("pct"),
+    })
 
     # Module → service nodes (one per module = microservice)
     for mod, ep_list in modules.items():
@@ -835,6 +851,12 @@ def api_topology_json(request):
                   "label": "runtime"})
     edges.append({"from": "python", "to": "monitor", "requests_5m": 0, "status": python_status,
                   "label": "runtime"})
+    edges.append({"from": "system", "to": "python", "requests_5m": 0, "status": system_status,
+                  "label": "hosts"})
+    edges.append({"from": "system", "to": "nginx", "requests_5m": 0, "status": system_status,
+                  "label": "hosts"})
+    edges.append({"from": "system", "to": "pg", "requests_5m": 0, "status": system_status,
+                  "label": "hosts"})
     edges.append({"from": "apps_api", "to": "monitor", "requests_5m": 0, "status": apps_status})
     edges.append({"from": "monitor", "to": "monitor_db", "requests_5m": 0, "status": "healthy"})
 
@@ -854,6 +876,7 @@ def api_topology_json(request):
             "media": {"status": media_status, "detail": media_detail, **media_meta},
             "nginx": {"status": nginx_status, "detail": nginx_detail, **nginx_meta},
             "python": {"status": python_status, "detail": python_detail, **python_meta},
+            "system": {"status": system_status, "detail": system_detail, **system_meta},
         },
         "server_time": now.isoformat(),
     })
