@@ -5,6 +5,23 @@
   </div>
 
   <div class="navbar__right">
+    <div class="navbar__notify" id="notifyBell">
+      <button class="navbar__bell" id="bellBtn" title="Notifikasi" aria-label="Notifikasi">
+        <i class="fa-solid fa-bell"></i>
+        <span class="navbar__badge" id="bellBadge" style="display:none">0</span>
+      </button>
+      <div class="navbar__panel" id="notifyPanel">
+        <div class="navbar__panel-head">
+          <span>Notifikasi</span>
+          <button class="navbar__mark" id="markAllRead">Tandai semua dibaca</button>
+        </div>
+        <div class="navbar__panel-body" id="notifyList">
+          <div class="navbar__empty">Belum ada notifikasi</div>
+        </div>
+        <a class="navbar__panel-foot" href="{% url 'alerts_page' %}">Lihat semua →</a>
+      </div>
+    </div>
+
     <div class="navbar__user">
       <div class="navbar__avatar">{{ request.user.username|first|upper }}</div>
       <span>{{ request.user.username }}</span>

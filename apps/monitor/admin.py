@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import APIEndpoint, APIRequestLog, WebhookEvent
+from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert
 
 
 @admin.register(APIEndpoint)
@@ -23,3 +23,16 @@ class WebhookEventAdmin(admin.ModelAdmin):
     list_display = ["event_type", "source_ip", "status", "received_at"]
     list_filter = ["status", "event_type"]
     readonly_fields = ["received_at", "processed_at"]
+
+
+@admin.register(Alert)
+class AlertAdmin(admin.ModelAdmin):
+    list_display = ["level", "title", "source", "is_read", "created_at"]
+    list_filter = ["level", "source", "is_read"]
+    search_fields = ["title", "message"]
+    readonly_fields = ["created_at"]
+    actions = ["mark_read"]
+
+    def mark_read(self, request, queryset):
+        queryset.update(is_read=True)
+    mark_read.short_description = "Tandai sudah dibaca"

@@ -9,12 +9,16 @@ urlpatterns = [
     path("webhooks/", views.webhook_list, name="webhook_list"),
 
     path("topology/", views.topology_view, name="topology"),
+    path("alerts/", views.alerts_view, name="alerts_page"),
     path("deliveries/", views.delivery_list, name="delivery_list"),
     # AJAX / API
     path("api/ping/<int:pk>/", views.api_ping, name="api_ping"),
     path("api/stats/", views.api_stats_json, name="api_stats_json"),
     path("api/activity/", views.api_activity_json, name="api_activity_json"),
     path("api/topology/", views.api_topology_json, name="api_topology_json"),
+    path("api/alerts/", views.api_alerts_json, name="api_alerts_json"),
+    path("api/alert/record/", views.api_alert_record, name="api_alert_record"),
+    path("api/alert/mark-read/", views.api_alert_mark_read, name="api_alert_mark_read"),
     # Webhook receiver (dari ApotekApps)
     path("webhook/receive/", views.webhook_receiver, name="webhook_receiver"),
 ]

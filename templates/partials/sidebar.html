@@ -15,6 +15,9 @@
   <a href="{% url 'topology' %}" class="dock__item {% if active_menu == 'topology' %}active{% endif %}" data-tip="Topology">
     <span class="dock__tile"><i class="fa-solid fa-network-wired"></i></span>
   </a>
+  <a href="{% url 'alerts_page' %}" class="dock__item {% if active_menu == 'alerts' %}active{% endif %}" data-tip="Notifikasi">
+    <span class="dock__tile"><i class="fa-solid fa-bell"></i></span>
+  </a>
   <a href="{% url 'delivery_list' %}" class="dock__item {% if active_menu == 'deliveries' %}active{% endif %}" data-tip="Pengantaran Obat">
     <span class="dock__tile"><i class="fa-solid fa-truck-medical"></i></span>
   </a>

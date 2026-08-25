@@ -1,6 +1,5 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
-from django.contrib import messages
 from django.views.decorators.http import require_http_methods
 
 
@@ -8,6 +7,7 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
 
+    login_error = None
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
@@ -17,9 +17,9 @@ def login_view(request):
             next_url = request.GET.get("next", "/")
             return redirect(next_url)
         else:
-            messages.error(request, "Username atau password salah.")
+            login_error = "Username atau password salah."
 
-    return render(request, "accounts/login.html")
+    return render(request, "accounts/login.html", {"login_error": login_error})
 
 
 @require_http_methods(["GET", "POST"])

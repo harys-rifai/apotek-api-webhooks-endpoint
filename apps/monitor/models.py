@@ -71,6 +71,44 @@ class APIRequestLog(models.Model):
         return self.response_time_ms is not None and self.response_time_ms > 2000
 
 
+class Alert(models.Model):
+    """Alert/notification tersimpan (mis. perubahan status node topologi)."""
+    LEVEL_INFO = "info"
+    LEVEL_WARNING = "warning"
+    LEVEL_CRITICAL = "critical"
+    LEVEL_SUCCESS = "success"
+    LEVEL_CHOICES = [
+        (LEVEL_INFO, "Info"),
+        (LEVEL_WARNING, "Warning"),
+        (LEVEL_CRITICAL, "Critical"),
+        (LEVEL_SUCCESS, "Success"),
+    ]
+
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default=LEVEL_INFO)
+    title = models.CharField(max_length=200)
+    message = models.TextField(blank=True, default="")
+    source = models.CharField(max_length=60, default="topology",
+                              help_text="Asal alert, mis. topology / monitor")
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["is_read", "created_at"])]
+
+    def __str__(self):
+        return f"[{self.level}] {self.title}"
+
+    @property
+    def icon(self):
+        return {
+            self.LEVEL_INFO: "fa-circle-info",
+            self.LEVEL_WARNING: "fa-triangle-exclamation",
+            self.LEVEL_CRITICAL: "fa-circle-xmark",
+            self.LEVEL_SUCCESS: "fa-circle-check",
+        }.get(self.level, "fa-bell")
+
+
 class WebhookEvent(models.Model):
     """Event yang diterima dari webhook ApotekApps."""
     STATUS_RECEIVED = "received"

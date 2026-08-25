@@ -5,8 +5,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}ApotekMonitor{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20260825e"/>
-  <link rel="stylesheet" href="{% static 'css/main.css' %}?v=20260825e"/>
+  <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20260825g"/>
+  <link rel="stylesheet" href="{% static 'css/main.css' %}?v=20260825g"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous"/>
   {% block extra_head %}{% endblock %}
 </head>
@@ -19,11 +19,6 @@
     {% include "partials/navbar.html" %}
 
     <div class="page-content">
-      {% if messages %}
-        {% for msg in messages %}
-          <div class="alert alert--{{ msg.tags }}">{{ msg }}</div>
-        {% endfor %}
-      {% endif %}
       {% block content %}{% endblock %}
     </div>
   </div>
@@ -31,7 +26,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="{% static 'js/main.js' %}?v=20260825e"></script>
+  <script src="{% static 'js/main.js' %}?v=20260825g"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

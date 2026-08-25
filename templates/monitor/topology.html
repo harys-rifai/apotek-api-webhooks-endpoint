@@ -129,6 +129,8 @@
     <span class="item"><span class="sw" style="background:#ff9f43"></span> Redis Cache</span>
     <span class="item"><span class="sw" style="background:#4dd0e1"></span> Media Storage</span>
     <span class="item"><span class="sw" style="background:#36e0ff"></span> Service / API</span>
+    <span class="item"><span class="sw" style="background:#9b8cff"></span> Python Runtime</span>
+    <span class="item"><span class="sw" style="background:#36e0ff"></span> Nginx Proxy</span>
     <span class="item"><i class="fa-solid fa-circle-nodes" style="color:#36e0ff"></i> Animated edge = live traffic</span>
   </div>
 </div>
@@ -141,7 +143,7 @@
   const COLOR = {
     healthy: "#36ff9e", warning: "#ffd23f", critical: "#ff4d6d",
     idle: "#7a7a9d", database: "#b06bff", service: "#36e0ff",
-    cache: "#ff9f43", storage: "#4dd0e1"
+    cache: "#ff9f43", storage: "#4dd0e1", runtime: "#9b8cff", proxy: "#36e0ff"
   };
   const nodesLayer = document.getElementById("nodesLayer");
   const edgesLayer = document.getElementById("edgesLayer");
@@ -151,6 +153,76 @@
   let nodeState = {};
   let edgeState = [];
   let dragId = null, dragOff = { x: 0, y: 0 };
+
+  // ── Monitoring notifications (status-change alerts) ──────────
+  let prevStatus = {};        // id → previous status string
+  let firstRender = true;
+  const LABELS = {
+    pg: "PostgreSQL", redis: "Redis Cache", media: "Media Storage",
+    apps_api: "ApotekApps REST API", monitor: "ApotekMonitor", monitor_db: "Monitor SQLite",
+  };
+  function nodeLabel(n) {
+    return n.label || LABELS[n.id] || n.id;
+  }
+  function statusToLevel(status) {
+    return status === "critical" ? "critical"
+         : status === "warning" ? "warning"
+         : status === "healthy" ? "success" : "info";
+  }
+  function recordAlert(level, title, message) {
+    fetch("{% url 'api_alert_record' %}", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest",
+                 "X-CSRFToken": getCookie("csrftoken") },
+      body: JSON.stringify({ level, title, message, source: "topology" }),
+    }).catch(() => {});
+  }
+  function emitNotifications(nodes, edges) {
+    const current = {};
+    nodes.forEach(n => { current[n.id] = { status: n.status, label: nodeLabel(n) }; });
+    edges.forEach(e => {
+      const key = "edge:" + e.from + "->" + e.to;
+      current[key] = {
+        status: e.status,
+        label: `Link ${nodeLabel({ id: e.from, label: LABELS[e.from] }) || e.from} → ${nodeLabel({ id: e.to, label: LABELS[e.to] }) || e.to}`,
+      };
+    });
+
+    if (firstRender) {
+      // baseline only — flag already-critical infra without spamming
+      Object.entries(current).forEach(([id, c]) => {
+        if (c.status === "critical") {
+          showToast(`<b>${c.label}</b> is CRITICAL on topology`, "error");
+          recordAlert("critical", `${c.label} CRITICAL`, "Node berstatus critical saat pantauan dimulai.");
+        }
+      });
+      prevStatus = current;
+      firstRender = false;
+      return;
+    }
+
+    Object.entries(current).forEach(([id, c]) => {
+      const prev = prevStatus[id];
+      if (!prev || prev.status === c.status) return;
+      const level = statusToLevel(c.status);
+      const prevLevel = statusToLevel(prev.status);
+      if (c.status === "critical") {
+        showToast(`<b>${c.label}</b> became CRITICAL`, "error");
+        recordAlert("critical", `${c.label} CRITICAL`, "Status berubah menjadi critical.");
+      } else if (c.status === "warning" && prev.status !== "warning") {
+        showToast(`<b>${c.label}</b> is now WARNING`, "warning");
+        recordAlert("warning", `${c.label} WARNING`, "Status berubah menjadi warning.");
+      } else if (c.status === "healthy" && (prev.status === "critical" || prev.status === "warning")) {
+        showToast(`<b>${c.label}</b> recovered → healthy`, "success");
+        recordAlert("success", `${c.label} recovered`, "Status kembali sehat.");
+      }
+    });
+    prevStatus = current;
+  }
+  function getCookie(name) {
+    const m = document.cookie.match(new RegExp("(^|;)\\s*" + name + "=([^;]+)"));
+    return m ? m[2] : "";
+  }
   const svg = document.getElementById("topoSvg");
   svg.style.cursor = "grab";
   let view = { x: 0, y: 0, w: 1180, h: 720 };
@@ -196,12 +268,14 @@
     //   infra on the left, the app API in the middle, monitor on the right,
     //   and the per-module microservices in a flowing grid on the right.
     const CORE = {
-      pg:         { x: 130, y: 110 },
-      redis:      { x: 130, y: 300 },
-      media:      { x: 130, y: 490 },
-      apps_api:   { x: 430, y: 300 },
-      monitor:    { x: 800, y: 230 },
-      monitor_db: { x: 970, y: 110 },
+      python:     { x: 130, y: 20 },
+      pg:         { x: 130, y: 200 },
+      redis:      { x: 130, y: 390 },
+      media:      { x: 130, y: 580 },
+      nginx:      { x: 430, y: 20 },
+      apps_api:   { x: 430, y: 390 },
+      monitor:    { x: 800, y: 320 },
+      monitor_db: { x: 970, y: 200 },
     };
     if (CORE[n.id]) return { x: CORE[n.id].x, y: CORE[n.id].y };
     // module services → flowing grid on the right of the app API
@@ -235,6 +309,7 @@
     const baseColor = ({
       database: COLOR.database, service: COLOR.service,
       cache: COLOR.cache, storage: COLOR.storage,
+      runtime: COLOR.runtime, proxy: COLOR.proxy,
     })[n.kind] || COLOR.service;
     const statusColor = COLOR[n.status] || baseColor;
     const g = el("g", { class: "node-card", transform: `translate(${x},${y})` });
@@ -258,6 +333,7 @@
       fill: "rgba(255,255,255,.04)", stroke: statusColor });
     const GLYPH = {
       pg:"🗄️", redis:"⚡", media:"📁", apps_api:"🛰️", monitor:"📡", monitor_db:"💾",
+      nginx:"🌐", python:"🐍",
       auth:"🔐", users:"👤", roles:"🛡️", medicines:"💊", suppliers:"🚚",
       inventory:"📦", purchasing:"🧾", sales:"🧮", orders:"🛒",
       attendance:"🕒", dashboard:"📊", reports:"📈", audit:"🔍", common:"⚙️",
@@ -336,19 +412,32 @@
   }
 
   function drawEdge(e) {
+    const key = e.from + "->" + e.to;
     const a = nodeState[e.from], b = nodeState[e.to];
     if (!a || !b) return;
     const color = COLOR[e.status] || COLOR.service;
     const down = (e.status === "critical");
+
+    // reuse existing edge so particle progress (t) keeps flowing across polls
+    const existing = edgeState.find(x => x.key === key);
+    if (existing) {
+      existing.a = a; existing.b = b; existing.color = color; existing.down = down;
+      existing.line.setAttribute("d", edgePath(a, b));
+      existing.line.setAttribute("stroke", color);
+      existing.line.setAttribute("class", "edge-line" + (down ? " down" : ""));
+      existing.parts.forEach(p => p.el.setAttribute("fill", color));
+      return;
+    }
+
     const line = el("path", { class: "edge-line" + (down ? " down" : ""),
       d: edgePath(a, b), stroke: color });
     edgesLayer.appendChild(line);
-    const N = down ? 0 : 3, parts = [];
+    const N = down ? 0 : 4, parts = [];
     for (let i = 0; i < N; i++) {
       const p = el("circle", { class: "particle", r: 3, fill: color, opacity: .9 });
       edgesLayer.appendChild(p); parts.push({ el: p, t: i / N });
     }
-    edgeState.push({ ...e, a, b, line, parts, color, down });
+    edgeState.push({ key, ...e, a, b, line, parts, color, down });
   }
 
   function edgePath(a, b) {
@@ -363,13 +452,14 @@
     }
   }
   function pointOnPath(a, b, t) {
+    // Harus persis sama dengan edgePath: kontrol point (a.x, midY) dan (b.x, midY)
     const midY = (a.y + b.y) / 2, mt = 1 - t;
     const x = mt*mt*mt*a.x + 3*mt*mt*t*a.x + 3*mt*t*t*b.x + t*t*t*b.x;
     const y = mt*mt*mt*a.y + 3*mt*mt*t*midY + 3*mt*t*t*midY + t*t*t*b.y;
     return { x, y };
   }
   function animate() {
-    const speed = 0.004;
+    const speed = 0.006;
     for (const ed of edgeState) {
       if (ed.down) continue;
       for (const p of ed.parts) {
@@ -391,13 +481,24 @@
       if (nodeState[id] && nodeState[id].x != null) userPos[id] = nodeState[id];
     }
 
-    nodesLayer.innerHTML = ""; edgesLayer.innerHTML = "";
-    nodeState = { _modOrder: nodeState._modOrder }; edgeState = [];
+    nodesLayer.innerHTML = "";
+    nodeState = { _modOrder: nodeState._modOrder };
 
     data.nodes.forEach((n, i) => {
       if (userPos[n.id]) { n._x = userPos[n.id].x; n._y = userPos[n.id].y; }
       drawNode(n, i, data.nodes.length);
     });
+
+    // reuse existing edges (preserve particle progress) — only rebuild what changed
+    const seenKeys = new Set();
+    data.edges.forEach(e => seenKeys.add(e.from + "->" + e.to));
+    // drop edges no longer present
+    for (const ed of edgeState) {
+      if (!seenKeys.has(ed.key)) {
+        ed.line.remove(); ed.parts.forEach(p => p.el.remove());
+      }
+    }
+    edgeState = edgeState.filter(ed => seenKeys.has(ed.key));
     data.edges.forEach(drawEdge);
     redrawEdges();
     fitView();
@@ -470,6 +571,7 @@
       const r = await fetch("{% url 'api_topology_json' %}", { headers: { "X-Requested-With": "XMLHttpRequest" } });
       const d = await r.json();
       render(d);
+      emitNotifications(d.nodes, d.edges);
       const ps = document.getElementById("pollState");
       ps.textContent = "live"; ps.className = "stat badge--success";
       if (first) { animate(); first = false; }

@@ -17,12 +17,10 @@
       <p class="login-card__sub">API Monitoring Dashboard</p>
     </div>
 
-    {% if messages %}
-      {% for msg in messages %}
-        <div class="alert alert--error">
-          <i class="fa-solid fa-circle-exclamation"></i> {{ msg }}
-        </div>
-      {% endfor %}
+    {% if login_error %}
+      <div class="alert alert--error">
+        <i class="fa-solid fa-circle-exclamation"></i> {{ login_error }}
+      </div>
     {% endif %}
 
     <form method="post" class="login-card__form">

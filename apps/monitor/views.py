@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
-from .models import APIEndpoint, APIRequestLog, WebhookEvent
+from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert
 from .services import call_api
 
 
@@ -186,6 +186,22 @@ def delivery_list(request):
 def topology_view(request):
     context = {"active_menu": "topology"}
     return render(request, "monitor/topology.html", context)
+
+
+@login_required
+def alerts_view(request):
+    level = request.GET.get("level", "")
+    qs = Alert.objects.all()
+    if level in {Alert.LEVEL_INFO, Alert.LEVEL_WARNING, Alert.LEVEL_CRITICAL, Alert.LEVEL_SUCCESS}:
+        qs = qs.filter(level=level)
+    alerts = qs[:200]
+    context = {
+        "active_menu": "alerts",
+        "alerts": alerts,
+        "level_filter": level,
+        "unread": Alert.objects.filter(is_read=False).count(),
+    }
+    return render(request, "monitor/alerts.html", context)
 
 
 # ── API Actions (AJAX) ────────────────────────────────────────────────────────
@@ -439,7 +455,8 @@ def _probe_redis():
         text = raw.decode(errors="replace")
 
         if "NOAUTH" in text or "WRONGPASS" in text or "invalid password" in text.lower():
-            return "critical", "auth failed", meta
+            # server is reachable but rejects the configured password → config issue, not down
+            return "warning", "auth failed (check REDIS_URL)", meta
         if "+PONG" not in text:
             return "critical", "no PONG response", meta
 
@@ -497,6 +514,208 @@ def _probe_media():
     return "healthy", f"{files} files · {size}", meta
 
 
+def _probe_nginx():
+    """Probe Nginx: process running + listening on :80/:443.
+
+    Returns (status, detail, meta). status is healthy|warning|critical.
+    """
+    import shutil
+    import subprocess
+
+    meta = {}
+    nginx_bin = shutil.which("nginx")
+    meta["binary"] = nginx_bin or "not found"
+
+    # 1) is nginx running?
+    try:
+        out = subprocess.run(
+            ["pgrep", "-f", "nginx: master"],
+            capture_output=True, text=True, timeout=2,
+        )
+        running = out.returncode == 0
+    except Exception:
+        running = False
+
+    if not running:
+        return "critical", "nginx not running", meta
+
+    # 2) is it listening on 80/443?
+    listening_80 = listening_443 = False
+    try:
+        import socket
+        for port in (80, 443):
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=1.5):
+                    if port == 80: listening_80 = True
+                    else: listening_443 = True
+            except Exception:
+                pass
+        meta["port_80"] = listening_80
+        meta["port_443"] = listening_443
+    except Exception:
+        pass
+
+    if listening_80 or listening_443:
+        ports = []
+        if listening_80: ports.append("80")
+        if listening_443: ports.append("443")
+        return "healthy", f"running · :{'+'.join(ports)}", meta
+    return "warning", "running but no listener on 80/443", meta
+
+
+def _probe_python():
+    """Probe the Python runtime that runs ApotekMonitor / ApotekApps.
+
+    Returns (status, detail, meta). Healthy if a supported interpreter exists.
+    """
+    import subprocess
+    import sys
+
+    meta = {"version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"}
+    meta["executable"] = sys.executable
+
+    try:
+        out = subprocess.run(
+            [sys.executable, "--version"],
+            capture_output=True, text=True, timeout=2,
+        )
+        ver = (out.stdout or out.stderr).strip().replace("Python ", "")
+        if ver:
+            meta["version"] = ver
+    except Exception as e:
+        return "critical", f"interpreter error: {e}", meta
+
+    # ApotekApps may use a different python (e.g. 3.11 via homebrew)
+    alt = None
+    candidates = ["/opt/homebrew/bin/python3.11", "/usr/local/bin/python3.11", "python3.11"]
+    for c in candidates:
+        try:
+            r = subprocess.run([c, "--version"], capture_output=True, text=True, timeout=2)
+            if r.returncode == 0:
+                alt = (r.stdout or r.stderr).strip().replace("Python ", "")
+                break
+        except Exception:
+            continue
+    if alt:
+        meta["apps_runtime"] = alt
+
+    return "healthy", f"Python {meta['version']}", meta
+
+
+def _human_bytes(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if abs(n) < 1024:
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} PB"
+
+
+def _probe_system():
+    """Host/OS-level health: disk, memory, and load average.
+
+    Uses psutil when available; otherwise falls back to macOS/BSD CLI tools.
+    Returns (status, detail, meta). Status is worst-of(disk, mem, load):
+      healthy / warning / critical by usage thresholds.
+    """
+    import platform
+
+    meta = {"platform": platform.system(), "hostname": platform.node()}
+    disk_pct = mem_pct = load_pct = None
+
+    # ── Disk (root / or MEDIA_ROOT if set) ──
+    try:
+        import shutil
+        cfg = _apotek_apps_config()
+        path = cfg("MEDIA_ROOT") or "/"
+        du = shutil.disk_usage(path)
+        disk_pct = round(du.used / du.total * 100, 1)
+        meta["disk"] = {
+            "path": path,
+            "total": _human_bytes(du.total),
+            "used": _human_bytes(du.used),
+            "free": _human_bytes(du.free),
+            "pct": disk_pct,
+        }
+    except Exception as e:
+        meta["disk_error"] = str(e)
+
+    # ── Memory ──
+    try:
+        import psutil
+        mv = psutil.virtual_memory()
+        mem_pct = round(mv.percent, 1)
+        meta["mem"] = {
+            "total": _human_bytes(mv.total),
+            "used": _human_bytes(mv.used),
+            "free": _human_bytes(mv.available),
+            "pct": mem_pct,
+        }
+    except ImportError:
+        # macOS fallback via vm_stat
+        try:
+            import subprocess
+            out = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=2).stdout
+            page = 4096
+            vals = {}
+            for line in out.splitlines():
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    v = v.strip().rstrip(".").replace(",", "")
+                    try:
+                        vals[k.strip()] = int(v) * page
+                    except ValueError:
+                        pass
+            used = vals.get("Pages active") + vals.get("Pages wired down") + vals.get("Pages occupied by compressor", 0)
+            free = vals.get("Pages free", 0) + vals.get("Pages inactive", 0)
+            total = used + free
+            if total:
+                mem_pct = round(used / total * 100, 1)
+                meta["mem"] = {"used": _human_bytes(used), "free": _human_bytes(free), "pct": mem_pct}
+        except Exception as e:
+            meta["mem_error"] = str(e)
+    except Exception as e:
+        meta["mem_error"] = str(e)
+
+    # ── Load average ──
+    try:
+        import os
+        try:
+            import psutil
+            load1 = psutil.getloadavg()[0]
+        except ImportError:
+            load1 = os.getloadavg()[0]
+        cpu_count = os.cpu_count() or 1
+        load_pct = round(load1 / cpu_count * 100, 1)
+        meta["load"] = {"load1": round(load1, 2), "cpus": cpu_count, "pct": load_pct}
+    except Exception as e:
+        meta["load_error"] = str(e)
+
+    # ── Thresholds → status (warning >=80, critical >=90) ──
+    def level(p):
+        if p is None:
+            return "healthy"
+        if p >= 90:
+            return "critical"
+        if p >= 80:
+            return "warning"
+        return "healthy"
+
+    worst = "healthy"
+    for p in (disk_pct, mem_pct, load_pct):
+        lv = level(p)
+        if lv == "critical":
+            worst = "critical"
+        elif lv == "warning" and worst != "critical":
+            worst = "warning"
+
+    parts = []
+    if disk_pct is not None: parts.append(f"disk {disk_pct}%")
+    if mem_pct is not None: parts.append(f"mem {mem_pct}%")
+    if load_pct is not None: parts.append(f"load {load_pct}%")
+    detail = " · ".join(parts) if parts else "metrics unavailable"
+    return worst, detail, meta
+
+
 @login_required
 def api_topology_json(request):
     """Dynatrace-style smartscape: services as nodes, traffic as edges, live health."""
@@ -507,6 +726,8 @@ def api_topology_json(request):
     db_status, db_detail = _probe_apotek_db()
     redis_status, redis_detail, redis_meta = _probe_redis()
     media_status, media_detail, media_meta = _probe_media()
+    nginx_status, nginx_detail, nginx_meta = _probe_nginx()
+    python_status, python_detail, python_meta = _probe_python()
 
     # Build nodes from monitored endpoints (grouped by module = service)
     eps = APIEndpoint.objects.filter(is_active=True)
@@ -567,6 +788,19 @@ def api_topology_json(request):
         "id": "monitor_db", "label": "Monitor SQLite", "kind": "database",
         "tech": "SQLite", "status": "healthy",
     })
+    # host-level runtime & web server
+    nodes.append({
+        "id": "python", "label": "Python Runtime", "kind": "runtime",
+        "tech": python_meta.get("version", "Python"), "status": python_status,
+        "detail": python_detail,
+        "version": python_meta.get("version"),
+        "apps_runtime": python_meta.get("apps_runtime"),
+    })
+    nodes.append({
+        "id": "nginx", "label": "Nginx", "kind": "proxy",
+        "tech": "Reverse Proxy", "status": nginx_status, "detail": nginx_detail,
+        "port_80": nginx_meta.get("port_80"), "port_443": nginx_meta.get("port_443"),
+    })
 
     # Module → service nodes (one per module = microservice)
     for mod, ep_list in modules.items():
@@ -595,6 +829,12 @@ def api_topology_json(request):
                   "label": "cache"})
     edges.append({"from": "media", "to": "apps_api", "requests_5m": 0, "status": media_status,
                   "label": "files"})
+    edges.append({"from": "nginx", "to": "apps_api", "requests_5m": 0, "status": nginx_status,
+                  "label": "proxy"})
+    edges.append({"from": "python", "to": "apps_api", "requests_5m": 0, "status": python_status,
+                  "label": "runtime"})
+    edges.append({"from": "python", "to": "monitor", "requests_5m": 0, "status": python_status,
+                  "label": "runtime"})
     edges.append({"from": "apps_api", "to": "monitor", "requests_5m": 0, "status": apps_status})
     edges.append({"from": "monitor", "to": "monitor_db", "requests_5m": 0, "status": "healthy"})
 
@@ -612,9 +852,73 @@ def api_topology_json(request):
             "postgres": {"status": db_status, "detail": db_detail},
             "redis": {"status": redis_status, "detail": redis_detail, **redis_meta},
             "media": {"status": media_status, "detail": media_detail, **media_meta},
+            "nginx": {"status": nginx_status, "detail": nginx_detail, **nginx_meta},
+            "python": {"status": python_status, "detail": python_detail, **python_meta},
         },
         "server_time": now.isoformat(),
     })
+
+
+# ── Alerts / notifications ─────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def api_alert_record(request):
+    """Simpan alert dari frontend (mis. perubahan status topologi)."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"error": "invalid json"}, status=400)
+
+    level = payload.get("level", Alert.LEVEL_INFO)
+    if level not in {Alert.LEVEL_INFO, Alert.LEVEL_WARNING,
+                     Alert.LEVEL_CRITICAL, Alert.LEVEL_SUCCESS}:
+        level = Alert.LEVEL_INFO
+    title = (payload.get("title") or "").strip()[:200]
+    message = (payload.get("message") or "").strip()
+    source = (payload.get("source") or "topology").strip()[:60]
+    if not title:
+        return JsonResponse({"error": "title required"}, status=400)
+
+    alert = Alert.objects.create(
+        level=level, title=title, message=message, source=source,
+    )
+    return JsonResponse({"ok": True, "id": alert.id})
+
+
+@login_required
+def api_alerts_json(request):
+    """Return recent alerts + unread count for the navbar bell."""
+    alerts = Alert.objects.all()[:30]
+    unread = Alert.objects.filter(is_read=False).count()
+    return JsonResponse({
+        "unread": unread,
+        "alerts": [
+            {
+                "id": a.id, "level": a.level, "title": a.title,
+                "message": a.message, "source": a.source,
+                "is_read": a.is_read,
+                "created_at": a.created_at.isoformat(),
+            }
+            for a in alerts
+        ],
+    })
+
+
+@login_required
+@require_POST
+def api_alert_mark_read(request):
+    """Tandai satu / semua alert sudah dibaca."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        payload = {}
+    aid = payload.get("id")
+    if aid:
+        Alert.objects.filter(id=aid, is_read=False).update(is_read=True)
+    else:
+        Alert.objects.filter(is_read=False).update(is_read=True)
+    return JsonResponse({"ok": True, "unread": Alert.objects.filter(is_read=False).count()})
 
 
 # ── Webhook receiver ──────────────────────────────────────────────────────────
