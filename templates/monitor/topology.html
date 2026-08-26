@@ -645,11 +645,13 @@
       const r = await fetch("{% url 'api_topology_json' %}", { headers: { "X-Requested-With": "XMLHttpRequest" } });
       const d = await r.json();
       render(d);
-      emitNotifications(d.nodes, d.edges);
       const ps = document.getElementById("pollState");
       ps.textContent = "live"; ps.className = "stat badge--success";
       if (first) { animate(); first = false; }
+      try { emitNotifications(d.nodes, d.edges); }
+      catch (err) { console.error("emitNotifications error:", err); }
     } catch (e) {
+      console.error("topology tick error:", e);
       const ps = document.getElementById("pollState");
       ps.textContent = "offline"; ps.className = "stat badge--danger";
     }

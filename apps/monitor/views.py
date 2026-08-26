@@ -970,7 +970,6 @@ def api_network_stream(request):
     resp = StreamingHttpResponse(event_generator(), content_type="text/event-stream")
     resp["Cache-Control"] = "no-cache, no-transform"
     resp["X-Accel-Buffering"] = "no"
-    resp["Connection"] = "keep-alive"
     return resp
 
 
