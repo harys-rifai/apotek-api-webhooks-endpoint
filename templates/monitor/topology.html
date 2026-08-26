@@ -29,6 +29,17 @@
   .filter-btn:hover { background:rgba(255,255,255,.05); border-color:var(--neon-cyan,#36e0ff); }
 
   .topo-main { min-width:0; }
+  .topo-split { display:flex; gap:1rem; align-items:stretch; }
+  .topo-split #topoWrap { flex:1; min-width:0;
+    background:
+      radial-gradient(circle at 14% 0%, rgba(70,130,255,.18), transparent 38%),
+      radial-gradient(circle at 86% 6%, rgba(180,90,255,.14), transparent 40%),
+      radial-gradient(circle at 50% 100%, rgba(0,200,255,.10), transparent 55%),
+      #05060c;
+    border:1px solid var(--color-border,#2a2a40);
+    border-radius:var(--radius-lg);
+    position:relative; overflow:hidden;
+  }
     background:
       radial-gradient(circle at 14% 0%, rgba(70,130,255,.18), transparent 38%),
       radial-gradient(circle at 86% 6%, rgba(180,90,255,.14), transparent 40%),
@@ -84,7 +95,38 @@
   @media (prefers-reduced-motion: reduce){
     .edge-line{animation:none;} .pulse-ring{display:none;}
   }
-</style>
+
+  /* ===== live network feed (SSE) ===== */
+  .net-feed {
+    width:300px; flex:0 0 300px; display:flex; flex-direction:column;
+    background:var(--bg-card); border:1px solid var(--color-border,#2a2a40);
+    border-radius:var(--radius-lg); padding:.7rem; min-height:720px; max-height:720px;
+  }
+  .net-feed__head { display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem; }
+  .net-feed__title { font-size:.85rem; font-weight:700; color:#f4f6ff; }
+  .net-feed__title i { color:var(--neon-cyan,#36e0ff); margin-right:.35rem; }
+  .net-feed__state { font-size:.72rem; color:var(--color-muted); }
+  .net-feed__state.live { color:#36ff9e; }
+  .net-feed__state.off { color:#ff4d6d; }
+  .net-feed__stats { display:flex; flex-wrap:wrap; gap:.3rem .8rem; font-size:.73rem;
+    color:var(--color-muted); margin-bottom:.6rem; padding-bottom:.5rem;
+    border-bottom:1px solid var(--color-border,#2a2a40); }
+  .net-feed__stats b { color:#e8e8f0; margin-left:.15rem; }
+  .net-feed__list { list-style:none; margin:0; padding:0; overflow-y:auto; flex:1; }
+  .net-feed__list li {
+    display:flex; align-items:center; gap:.45rem; font-size:.74rem; padding:.32rem .15rem;
+    border-bottom:1px dashed rgba(120,150,255,.10); animation: feedIn .25s ease;
+  }
+  @keyframes feedIn { from{opacity:0; transform:translateY(-4px);} to{opacity:1;} }
+  .net-feed__list .dot { width:8px; height:8px; border-radius:50%; flex:0 0 8px; }
+  .net-feed__list .meth { font-weight:700; width:42px; flex:0 0 42px; }
+  .net-feed__list .path { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#c8cdf0; }
+  .net-feed__list .ms { color:var(--color-muted); flex:0 0 auto; }
+  .net-feed__list .wh { color:#9b8cff; font-weight:700; flex:0 0 auto; }
+  @media (max-width:1100px){
+    .topo-split{ flex-direction:column; }
+    .net-feed{ width:auto; flex:none; max-height:260px; min-height:0; }
+  }</style>
 {% endblock %}
 
 {% block content %}
@@ -106,7 +148,8 @@
 </div>
 
 <div class="topo-main">
-  <div id="topoWrap">
+  <div class="topo-split">
+    <div id="topoWrap">
     <svg id="topoSvg" viewBox="0 0 1180 720" preserveAspectRatio="xMidYMid meet">
       <defs>
         <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -118,6 +161,22 @@
       <g id="nodesLayer"></g>
     </svg>
     <div class="node-tooltip" id="tooltip"></div>
+  </div>
+
+  <!-- LIVE NETWORK FEED -->
+  <aside class="net-feed" id="netFeed">
+    <div class="net-feed__head">
+      <span class="net-feed__title"><i class="fa-solid fa-wave-square"></i> Network Stream</span>
+      <span class="net-feed__state" id="netState">connecting…</span>
+    </div>
+    <div class="net-feed__stats">
+      <span>pkts <b id="netPkts">0</b></span>
+      <span>in/s <b id="netInRate">0</b></span>
+      <span>req <b id="netReq">0</b></span>
+      <span>hook <b id="netWh">0</b></span>
+    </div>
+    <ul class="net-feed__list" id="netList"></ul>
+  </aside>
   </div>
 
   <div class="legend">
@@ -597,6 +656,111 @@
   }
   tick();
   setInterval(tick, 3000);
+
+  // ── Live network stream (SSE) ──────────────────────────────────
+  // Each "packet" event animates a one-shot travelling packet along the
+  // matching edge(s) and appends a row to the live feed panel.
+  const netStateEl = document.getElementById("netState");
+  const netListEl = document.getElementById("netList");
+  const netPktsEl = document.getElementById("netPkts");
+  const netInRateEl = document.getElementById("netInRate");
+  const netReqEl = document.getElementById("netReq");
+  const netWhEl = document.getElementById("netWh");
+  let netPkts = 0, netReq = 0, netWh = 0;
+  let _inWindow = 0, _inWindowStart = Date.now();
+  let streamBroken = false;
+
+  function edgeColorForPacket(p) {
+    if (p.type === "webhook") return COLOR.warning;
+    if (p.status === "fail" || p.status === "error") return COLOR.critical;
+    return COLOR.healthy;
+  }
+
+  function spawnPacket(edgeKey, color) {
+    const ed = edgeState.find(x => x.key === edgeKey);
+    if (!ed) return;
+    const p = el("circle", { r: 4, fill: color, opacity: .95,
+      style: "filter:drop-shadow(0 0 6px " + color + ")" });
+    edgesLayer.appendChild(p);
+    const dur = 700; // ms
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / dur);
+      // follow the same cubic bezier as the edge path (pointOnPath)
+      const pt = pointOnPath(ed.a, ed.b, t);
+      p.setAttribute("cx", pt.x); p.setAttribute("cy", pt.y);
+      p.setAttribute("opacity", (1 - t * 0.7).toFixed(2));
+      if (t < 1) requestAnimationFrame(step);
+      else p.remove();
+    }
+    requestAnimationFrame(step);
+  }
+
+  function appendFeed(p) {
+    const li = document.createElement("li");
+    if (p.type === "webhook") {
+      li.innerHTML = `<span class="dot" style="background:${COLOR.warning}"></span>` +
+        `<span class="wh">WH</span>` +
+        `<span class="path">${p.event_type}</span>` +
+        `<span class="ms">${p.status || ""}</span>`;
+    } else {
+      const c = edgeColorForPacket(p);
+      const meth = (p.method || "GET");
+      const ms = p.response_time_ms != null ? Math.round(p.response_time_ms) + "ms" : "";
+      li.innerHTML = `<span class="dot" style="background:${c}"></span>` +
+        `<span class="meth">${meth}</span>` +
+        `<span class="path">${p.path}</span>` +
+        `<span class="ms">${ms}</span>`;
+    }
+    netListEl.prepend(li);
+    while (netListEl.children.length > 40) netListEl.lastChild.remove();
+  }
+
+  function handlePacket(p) {
+    netPkts++; netInWindowInc();
+    if (p.type === "webhook") {
+      netWh++;
+      spawnPacket("apps_api->monitor", edgeColorForPacket(p));
+    } else {
+      netReq++;
+      spawnPacket("nginx->apps_api", edgeColorForPacket(p));
+      spawnPacket("apps_api->svc_" + p.module, edgeColorForPacket(p));
+    }
+    netPktsEl.textContent = netPkts;
+    netReqEl.textContent = netReq;
+    netWhEl.textContent = netWh;
+    appendFeed(p);
+  }
+
+  function netInWindowInc() { _inWindow++; }
+  setInterval(() => {
+    const now = Date.now();
+    const secs = (now - _inWindowStart) / 1000;
+    if (secs >= 1) {
+      netInRateEl.textContent = Math.round(_inWindow / secs);
+      _inWindow = 0; _inWindowStart = now;
+    }
+  }, 1000);
+
+  function connectStream() {
+    if (streamBroken) return;
+    const es = new EventSource("{% url 'api_network_stream' %}");
+    es.addEventListener("ready", () => {
+      netStateEl.textContent = "live"; netStateEl.className = "net-feed__state live";
+    });
+    es.addEventListener("packet", (ev) => {
+      try { handlePacket(JSON.parse(ev.data)); } catch (e) {}
+    });
+    es.onerror = () => {
+      netStateEl.textContent = "reconnecting…"; netStateEl.className = "net-feed__state off";
+      // EventSource auto-reconnects; if blocked (e.g. auth), stop to avoid spam
+      es.close();
+      setTimeout(() => {
+        if (!streamBroken) connectStream();
+      }, 2500);
+    };
+  }
+  connectStream();
 })();
 </script>
 {% endblock %}

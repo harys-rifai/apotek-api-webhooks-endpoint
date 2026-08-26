@@ -882,6 +882,98 @@ def api_topology_json(request):
     })
 
 
+@login_required
+def api_network_stream(request):
+    """Server-Sent Events stream of live network traffic.
+
+    Each emitted event corresponds to a real network event that just happened:
+    an API request to ApotekApps (edge apps_api → module service, or nginx →
+    apps_api) or a webhook received from ApotekApps (edge apps_api → monitor).
+    The frontend turns these into animated "packets" that travel along the
+    matching edges of the topology smartscape, so the data flow is visible.
+    """
+    import time as _time
+    from django.http import StreamingHttpResponse
+
+    # Map an API log to the topology edge it travels along.
+    #   nginx → apps_api for the inbound hop, then apps_api → svc_<module>.
+    def map_log_event(log):
+        module = (log.endpoint.module if log.endpoint else
+                  (log.path.strip("/").split("/")[0] if log.path else "common"))
+        module = module or "common"
+        return {
+            "type": "api",
+            "status": log.status,
+            "method": log.method,
+            "path": log.path,
+            "module": module,
+            "status_code": log.status_code,
+            "response_time_ms": round(log.response_time_ms, 1) if log.response_time_ms else None,
+            "edge_in": "nginx->apps_api",
+            "edge_out": f"apps_api->svc_{module}",
+            "at": log.created_at.isoformat(),
+        }
+
+    def map_webhook_event(wh):
+        return {
+            "type": "webhook",
+            "event_type": wh.event_type,
+            "status": wh.status,
+            "source_ip": str(wh.source_ip) if wh.source_ip else None,
+            "edge": "apps_api->monitor",
+            "at": wh.received_at.isoformat(),
+        }
+
+    def event_generator():
+        last_log_at = None
+        last_wh_at = None
+        # seed watermarks with the most recent existing records so we only
+        # stream *new* events after the connection opens.
+        l = APIRequestLog.objects.order_by("-created_at").first()
+        w = WebhookEvent.objects.order_by("-received_at").first()
+        last_log_at = l.created_at if l else None
+        last_wh_at = w.received_at if w else None
+        # initial heartbeat so the client knows the stream is alive
+        yield "event: ready\ndata: {}\n\n"
+        while True:
+            new_logs = []
+            if last_log_at is not None:
+                new_logs = list(APIRequestLog.objects
+                                .filter(created_at__gt=last_log_at)
+                                .select_related("endpoint")
+                                .order_by("created_at"))
+            elif APIRequestLog.objects.exists():
+                new_logs = list(APIRequestLog.objects
+                                .select_related("endpoint")
+                                .order_by("created_at")[:50])
+
+            new_wh = []
+            if last_wh_at is not None:
+                new_wh = list(WebhookEvent.objects
+                              .filter(received_at__gt=last_wh_at)
+                              .order_by("received_at"))
+            elif WebhookEvent.objects.exists():
+                new_wh = list(WebhookEvent.objects.order_by("received_at")[:50])
+
+            for log in new_logs:
+                payload = json.dumps(map_log_event(log))
+                yield f"event: packet\ndata: {payload}\n\n"
+                last_log_at = log.created_at
+            for wh in new_wh:
+                payload = json.dumps(map_webhook_event(wh))
+                yield f"event: packet\ndata: {payload}\n\n"
+                last_wh_at = wh.received_at
+
+            yield ": ping\n\n"
+            _time.sleep(1)
+
+    resp = StreamingHttpResponse(event_generator(), content_type="text/event-stream")
+    resp["Cache-Control"] = "no-cache, no-transform"
+    resp["X-Accel-Buffering"] = "no"
+    resp["Connection"] = "keep-alive"
+    return resp
+
+
 # ── Alerts / notifications ─────────────────────────────────────────────────────
 
 @login_required

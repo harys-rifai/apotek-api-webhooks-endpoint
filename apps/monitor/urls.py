@@ -16,6 +16,7 @@ urlpatterns = [
     path("api/stats/", views.api_stats_json, name="api_stats_json"),
     path("api/activity/", views.api_activity_json, name="api_activity_json"),
     path("api/topology/", views.api_topology_json, name="api_topology_json"),
+    path("api/network/stream/", views.api_network_stream, name="api_network_stream"),
     path("api/alerts/", views.api_alerts_json, name="api_alerts_json"),
     path("api/alert/record/", views.api_alert_record, name="api_alert_record"),
     path("api/alert/mark-read/", views.api_alert_mark_read, name="api_alert_mark_read"),
