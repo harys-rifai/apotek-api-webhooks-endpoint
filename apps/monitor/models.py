@@ -2,6 +2,36 @@ from django.db import models
 from django.utils import timezone
 
 
+class AiInsight(models.Model):
+    """Snapshot hasil analisis cerdas (AI) terhadap kondisi sistem/monitor."""
+    SEVERITY_INFO = "info"
+    SEVERITY_WARNING = "warning"
+    SEVERITY_CRITICAL = "critical"
+    SEVERITY_SUCCESS = "success"
+    SEVERITY_CHOICES = [
+        (SEVERITY_INFO, "Info"),
+        (SEVERITY_WARNING, "Warning"),
+        (SEVERITY_CRITICAL, "Critical"),
+        (SEVERITY_SUCCESS, "Success"),
+    ]
+
+    summary = models.TextField()
+    details = models.JSONField(default=list)  # list of {label, value, severity}
+    severity = models.CharField(
+        max_length=20, choices=SEVERITY_CHOICES, default=SEVERITY_INFO
+    )
+    metrics = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "AI Insight"
+        verbose_name_plural = "AI Insights"
+
+    def __str__(self):
+        return f"AI Insight [{self.severity}] @ {self.created_at:%Y-%m-%d %H:%M}"
+
+
 class APIEndpoint(models.Model):
     """Daftar endpoint yang dipantau."""
     name = models.CharField(max_length=120)

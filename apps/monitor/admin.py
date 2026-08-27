@@ -1,5 +1,12 @@
 from django.contrib import admin
-from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert
+from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight
+
+
+@admin.register(AiInsight)
+class AiInsightAdmin(admin.ModelAdmin):
+    list_display = ["severity", "summary", "created_at"]
+    list_filter = ["severity"]
+    readonly_fields = ["created_at", "details", "metrics"]
 
 
 @admin.register(APIEndpoint)
