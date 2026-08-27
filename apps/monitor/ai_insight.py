@@ -199,13 +199,13 @@ def _infra_health():
             status, detail = "warning", f"probe error: {e}"
         out.append({
             "name": name,
-            "value": f"{status.capitalize()} — {detail}",
+            "value": detail,
             "severity": sev_map.get(status, AiInsight.SEVERITY_INFO),
         })
     # Monitor SQLite (this app's own DB) — always healthy if we got here
     out.append({
         "name": "Monitor SQLite",
-        "value": "healthy — basis data lokal Monitor aktif.",
+        "value": "Basis data lokal Monitor aktif.",
         "severity": AiInsight.SEVERITY_SUCCESS,
     })
     return out
