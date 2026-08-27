@@ -167,18 +167,39 @@
     font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--color-muted);
     margin-bottom:.45rem; }
   .net-feed__subhead i { color:var(--neon-cyan,#36e0ff); }
-  .net-feed__list { list-style:none; margin:0; padding:0; overflow-y:auto; flex:1;
-    border-top:1px solid var(--color-border,#2a2a40); padding-top:.45rem; }
-  .net-feed__list li {
-    display:flex; align-items:center; gap:.45rem; font-size:.72rem; padding:.3rem .15rem;
+  .net-feed__subhead { display:flex; align-items:center; gap:.4rem; }
+  .db-size__btn {
+    margin-left:auto; background:transparent; border:1px solid var(--color-border,#2a2a40);
+    color:#c8cdf0; border-radius:6px; width:22px; height:22px; cursor:pointer;
+    display:inline-flex; align-items:center; justify-content:center; font-size:.7rem;
+    transition:transform .2s ease, color .15s ease, border-color .15s ease; }
+  .db-size__btn:hover { color:var(--neon-cyan,#36e0ff); border-color:var(--neon-cyan,#36e0ff); }
+  .db-size__btn:disabled { opacity:.5; cursor:default; }
+  .db-size__btn.spin i { animation: dbSpin .7s linear infinite; }
+  @keyframes dbSpin { from{transform:rotate(0);} to{transform:rotate(360deg);} }
+  .db-size__countdown { font-size:.66rem; color:var(--color-muted); font-variant-numeric:tabular-nums; min-width:38px; text-align:right; }
+  .db-size__list { list-style:none; margin:0; padding:0; overflow-y:auto; flex:1;
+    border-top:1px solid var(--color-border,#2a2a40); padding-top:.4rem; }
+  .db-size__row {
+    display:grid; grid-template-columns:18px 1fr auto; align-items:center; gap:.4rem;
+    font-size:.74rem; padding:.4rem .15rem; position:relative;
     border-bottom:1px dashed rgba(120,150,255,.10); animation: feedIn .25s ease;
   }
   @keyframes feedIn { from{opacity:0; transform:translateY(-4px);} to{opacity:1;} }
-  .net-feed__list .dot { width:8px; height:8px; border-radius:50%; flex:0 0 8px; }
-  .net-feed__list .meth { font-weight:700; width:42px; flex:0 0 42px; }
-  .net-feed__list .path { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#c8cdf0; }
-  .net-feed__list .ms { color:var(--color-muted); flex:0 0 auto; }
-  .net-feed__list .wh { color:#9b8cff; font-weight:700; flex:0 0 auto; }
+  .db-size__icon { font-size:.85rem; text-align:center; }
+  .db-size__name { color:#c8cdf0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .db-size__val { font-weight:700; color:var(--color-text,#e8e8f0); font-variant-numeric:tabular-nums; }
+  .db-size__meta {
+    grid-column:2 / 4; font-size:.66rem; color:var(--color-muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .db-size__sub {
+    grid-column:2 / 4; font-size:.66rem; color:#c8cdf0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .db-size__sub b { color:#36ff9e; font-variant-numeric:tabular-nums; }
+  .db-size__row[data-status="healthy"] .db-size__val { color:#36ff9e; }
+  .db-size__row[data-status="warning"] .db-size__val { color:#ffd23f; }
+  .db-size__row[data-status="critical"] .db-size__val { color:#ff4d6d; }
+  .db-size__row[data-status="unknown"] .db-size__val { color:#7a7a9d; }
   @media (max-width:1100px){
     .topo-split{ flex-direction:column; }
     .net-feed{ width:auto; flex:none; max-height:260px; min-height:0; }
@@ -246,8 +267,34 @@
       </ul>
     </div>
 
-    <div class="net-feed__subhead"><i class="fa-solid fa-list-ul"></i> Live Packets</div>
-    <ul class="net-feed__list" id="netList"></ul>
+    <div class="net-feed__subhead">
+      <i class="fa-solid fa-database"></i> Storage &amp; Database
+      <button type="button" class="db-size__btn" id="dbRefreshBtn" title="Refresh sekarang">
+        <i class="fa-solid fa-rotate"></i>
+      </button>
+      <span class="db-size__countdown" id="dbCountdown"></span>
+    </div>
+    <ul class="db-size__list" id="dbSizeList">
+      <li class="db-size__row" data-store="sqlite">
+        <span class="db-size__icon"><i class="fa-solid fa-database" style="color:#b06bff"></i></span>
+        <span class="db-size__name">SQLite (Monitor)</span>
+        <span class="db-size__val" id="dbSqlite">—</span>
+        <span class="db-size__meta" id="dbSqliteMeta"></span>
+      </li>
+      <li class="db-size__row" data-store="postgres">
+        <span class="db-size__icon"><i class="fa-solid fa-database" style="color:#36e0ff"></i></span>
+        <span class="db-size__name">PostgreSQL (ApotekApps)</span>
+        <span class="db-size__val" id="dbPg">—</span>
+        <span class="db-size__meta" id="dbPgMeta"></span>
+        <span class="db-size__sub" id="dbPgSub"></span>
+      </li>
+      <li class="db-size__row" data-store="redis">
+        <span class="db-size__icon"><i class="fa-solid fa-cube" style="color:#ff5b4d"></i></span>
+        <span class="db-size__name">Redis Cache</span>
+        <span class="db-size__val" id="dbRedis">—</span>
+        <span class="db-size__meta" id="dbRedisMeta"></span>
+      </li>
+    </ul>
   </aside>
   </div>
 
@@ -414,6 +461,7 @@
       monitor:    { x: 760, y: 380 },
       monitor_db: { x: 980, y: 200 },
       email:      { x: 760, y: 40 },
+      member:     { x: 1440, y: 480 },
     };
     if (CORE[n.id]) return { x: CORE[n.id].x, y: CORE[n.id].y };
     // module services → flowing grid kept clear of the core nodes (far right)
@@ -546,7 +594,10 @@
     const metric = el("text", { class: "node-metric", x: w/2 - 10, y: h/2 - 9,
       "text-anchor": "end", fill: statusColor });
     let metricTxt = "";
-    if (n.latency_ms != null) metricTxt = n.latency_ms + " ms";
+    if (n.id === "pg" && n.members != null) {
+      metricTxt = `M:${n.members} P:${n.points ?? 0}`;
+    }
+    else if (n.latency_ms != null) metricTxt = n.latency_ms + " ms";
     else if (n.files != null) metricTxt = (n.files||0) + " files";
     else if (n.success_rate != null) metricTxt = n.success_rate + "% · " + (n.requests_5m||0) + "r";
     else if (n.kind === "system") {
@@ -836,7 +887,6 @@
   // Each "packet" event animates a one-shot travelling packet along the
   // matching edge(s) and appends a row to the live feed panel.
   const netStateEl = document.getElementById("netState");
-  const netListEl = document.getElementById("netList");
   const netPktsEl = document.getElementById("netPkts");
   const netInRateEl = document.getElementById("netInRate");
   const netReqEl = document.getElementById("netReq");
@@ -871,26 +921,6 @@
     requestAnimationFrame(step);
   }
 
-  function appendFeed(p) {
-    const li = document.createElement("li");
-    if (p.type === "webhook") {
-      li.innerHTML = `<span class="dot" style="background:${COLOR.warning}"></span>` +
-        `<span class="wh">WH</span>` +
-        `<span class="path">${p.event_type}</span>` +
-        `<span class="ms">${p.status || ""}</span>`;
-    } else {
-      const c = edgeColorForPacket(p);
-      const meth = (p.method || "GET");
-      const ms = p.response_time_ms != null ? Math.round(p.response_time_ms) + "ms" : "";
-      li.innerHTML = `<span class="dot" style="background:${c}"></span>` +
-        `<span class="meth">${meth}</span>` +
-        `<span class="path">${p.path}</span>` +
-        `<span class="ms">${ms}</span>`;
-    }
-    netListEl.prepend(li);
-    while (netListEl.children.length > 40) netListEl.lastChild.remove();
-  }
-
   function handlePacket(p) {
     netPkts++; netInWindowInc();
     if (p.type === "webhook") {
@@ -904,8 +934,76 @@
     netPktsEl.textContent = netPkts;
     netReqEl.textContent = netReq;
     netWhEl.textContent = netWh;
-    appendFeed(p);
   }
+
+  // ── Storage & Database sizes ─────────────────────────────────────
+  const dbSizeRows = {
+    sqlite:  document.querySelector('.db-size__row[data-store="sqlite"]'),
+    postgres: document.querySelector('.db-size__row[data-store="postgres"]'),
+    redis:   document.querySelector('.db-size__row[data-store="redis"]'),
+  };
+  const dbSqliteEl = document.getElementById("dbSqlite");
+  const dbSqliteMetaEl = document.getElementById("dbSqliteMeta");
+  const dbPgEl = document.getElementById("dbPg");
+  const dbPgMetaEl = document.getElementById("dbPgMeta");
+  const dbPgSubEl = document.getElementById("dbPgSub");
+  const dbRedisEl = document.getElementById("dbRedis");
+  const dbRedisMetaEl = document.getElementById("dbRedisMeta");
+  const dbRefreshBtn = document.getElementById("dbRefreshBtn");
+  const dbCountdownEl = document.getElementById("dbCountdown");
+
+  const DB_REFRESH_MS = 300000; // 5 menit
+  let _dbNext = Date.now() + DB_REFRESH_MS;
+
+  function setStore(row, valEl, metaEl, d) {
+    if (!row) return;
+    row.setAttribute("data-status", d.status || "unknown");
+    valEl.textContent = d.human != null ? d.human : "n/a";
+    const metaBits = [];
+    if (d.tables != null) metaBits.push(d.tables + " tables");
+    if (d.keys != null) metaBits.push(d.keys + " keys");
+    if (d.detail) metaBits.push(d.detail);
+    metaEl.textContent = metaBits.join(" · ");
+  }
+
+  function renderDbCountdown() {
+    const secs = Math.max(0, Math.round((_dbNext - Date.now()) / 1000));
+    const m = Math.floor(secs / 60), s = secs % 60;
+    dbCountdownEl.textContent = m + ":" + String(s).padStart(2, "0");
+  }
+
+  async function refreshDbSizes() {
+    dbRefreshBtn.disabled = true;
+    dbRefreshBtn.classList.add("spin");
+    try {
+      const res = await fetch("{% url 'api_db_sizes' %}", {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setStore(dbSizeRows.sqlite, dbSqliteEl, dbSqliteMetaEl, d.sqlite);
+        setStore(dbSizeRows.postgres, dbPgEl, dbPgMetaEl, d.postgres);
+        setStore(dbSizeRows.redis, dbRedisEl, dbRedisMetaEl, d.redis);
+        if (dbPgSubEl && d.postgres) {
+          const bits = [];
+          if (d.postgres.members != null) bits.push("Member: <b>" + d.postgres.members + "</b>");
+          if (d.postgres.points != null) bits.push("Poin: <b>" + d.postgres.points + "</b>");
+          dbPgSubEl.innerHTML = bits.join(" &nbsp;·&nbsp; ");
+        }
+      }
+    } catch (e) { /* abaikan gagal ambil ukuran db */ }
+    finally {
+      _dbNext = Date.now() + DB_REFRESH_MS;
+      dbRefreshBtn.disabled = false;
+      dbRefreshBtn.classList.remove("spin");
+      renderDbCountdown();
+    }
+  }
+
+  if (dbRefreshBtn) dbRefreshBtn.addEventListener("click", refreshDbSizes);
+  refreshDbSizes();
+  setInterval(refreshDbSizes, DB_REFRESH_MS);
+  setInterval(renderDbCountdown, 1000);
 
   function netInWindowInc() { _inWindow++; }
   setInterval(() => {

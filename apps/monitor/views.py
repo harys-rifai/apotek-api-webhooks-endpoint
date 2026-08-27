@@ -17,6 +17,24 @@ from .ai_insight import generate_ai_insight
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _human_size(num: float) -> str:
+    """Format a byte count into a human-readable string (KB/MB/GB/…)."""
+    try:
+        n = float(num)
+    except (TypeError, ValueError):
+        return "n/a"
+    if n < 0:
+        return "n/a"
+    units = ["B", "KB", "MB", "GB", "TB", "PB"]
+    i = 0
+    while n >= 1024 and i < len(units) - 1:
+        n /= 1024.0
+        i += 1
+    if i == 0:
+        return f"{int(n)} {units[i]}"
+    return f"{n:.1f} {units[i]}"
+
+
 def _stats_for_period(days: int = 7) -> dict:
     since = timezone.now() - timedelta(days=days)
     qs = APIRequestLog.objects.filter(created_at__gte=since)
@@ -351,6 +369,53 @@ def api_activity_json(request):
     })
 
 
+@login_required
+def api_db_sizes(request):
+    """Return sizes for every datastore: monitor SQLite, ApotekApps PostgreSQL,
+    and Redis. Used by the topology 'Storage & Database' panel."""
+    sqlite_path = settings.DATABASES.get("default", {}).get("NAME")
+    pg = _postgres_size()
+    redis = _redis_size()
+
+    sqlite_bytes = _sqlite_size(sqlite_path)
+    try:
+        from django.db import connection
+        sqlite_tables = connection.introspection.table_names()
+    except Exception:
+        sqlite_tables = []
+
+    data = {
+        "sqlite": {
+            "label": "SQLite (Monitor)",
+            "path": str(sqlite_path),
+            "bytes": sqlite_bytes,
+            "human": _human_size(sqlite_bytes),
+            "tables": len(sqlite_tables),
+            "status": "healthy" if sqlite_bytes > 0 else "warning",
+        },
+        "postgres": {
+            "label": "PostgreSQL (ApotekApps)",
+            "bytes": pg.get("bytes"),
+            "human": _human_size(pg["bytes"]) if pg.get("bytes") is not None else "n/a",
+            "tables": pg.get("tables"),
+            "members": pg.get("members"),
+            "points": pg.get("points"),
+            "status": pg.get("status", "unknown"),
+            "detail": pg.get("detail", ""),
+        },
+        "redis": {
+            "label": "Redis Cache",
+            "bytes": redis.get("bytes"),
+            "human": _human_size(redis["bytes"]) if redis.get("bytes") is not None else "n/a",
+            "keys": redis.get("keys"),
+            "status": redis.get("status", "unknown"),
+            "detail": redis.get("detail", ""),
+        },
+        "server_time": timezone.now().isoformat(),
+    }
+    return JsonResponse(data)
+
+
 def _apotek_apps_dir():
     """Best-effort path to the sibling ApotekApps project."""
     import os
@@ -403,6 +468,141 @@ def _probe_apotek_db():
         return "healthy", "port open (no driver)"
     except Exception as e:
         return "critical", f"connect failed: {e}"
+
+
+def _sqlite_size(path) -> int:
+    """Return the byte size of a file (0 if missing)."""
+    import os
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
+def _postgres_size() -> dict:
+    """Return {'bytes': int|None, 'tables': int|None, 'status': ...} for the
+    ApotekApps PostgreSQL replica via a real psycopg connection when available."""
+    cfg = _apotek_apps_config()
+    host = cfg("DB_HOST", "localhost")
+    port = int(cfg("DB_PORT", 5432))
+    name = cfg("DB_NAME", "apotek_pos")
+    user = cfg("DB_USER", "postgres")
+    password = cfg("DB_PASSWORD", "")
+
+    try:
+        import psycopg
+        _connect = lambda: psycopg.connect(
+            host=host, port=port, dbname=name, user=user,
+            password=password, connect_timeout=2,
+        )
+        _driver = "psycopg"
+    except ImportError:
+        try:
+            import psycopg2
+            _connect = lambda: psycopg2.connect(
+                host=host, port=port, dbname=name, user=user,
+                password=password, connect_timeout=2,
+            )
+            _driver = "psycopg2"
+        except ImportError:
+            return {"bytes": None, "tables": None, "status": "unknown",
+                    "detail": "no postgres driver (psycopg/psycopg2)"}
+
+    try:
+        conn = _connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT pg_database_size(%s)", (name,)
+            )
+            size = cur.fetchone()[0]
+            cur.execute(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_schema NOT IN ('pg_catalog','information_schema') "
+                "AND table_type = 'BASE TABLE'"
+            )
+            tables = cur.fetchone()[0]
+            # member & poin loyalty (tabel `members`, soft-delete is_deleted)
+            members = points = None
+            try:
+                cur.execute(
+                    "SELECT count(*), COALESCE(sum(points),0) "
+                    "FROM members WHERE is_deleted = FALSE"
+                )
+                members, points = cur.fetchone()
+            except Exception:
+                members = points = None
+        conn.close()
+        return {"bytes": size, "tables": tables, "members": members,
+                "points": points, "status": "healthy",
+                "detail": f"{name}@{host}:{port}"}
+    except Exception as e:
+        return {"bytes": None, "tables": None, "members": None, "points": None,
+                "status": "critical", "detail": f"connect failed: {e}"}
+
+
+def _redis_size() -> dict:
+    """Return {'bytes': int|None, 'keys': int|None, 'status': ...} for Redis
+    via a raw RESP INFO+DBSIZE (no redis-py dependency required)."""
+    import socket
+    import time
+
+    cfg = _apotek_apps_config()
+    url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
+    info = _parse_redis_url(url)
+
+    def encode(*args):
+        out = f"*{len(args)}\r\n".encode()
+        for a in args:
+            a = str(a).encode()
+            out += b"$%d\r\n%s\r\n" % (len(a), a)
+        return out
+
+    try:
+        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
+            if info["ssl"]:
+                import ssl as _ssl
+                sock = _ssl.create_default_context().wrap_socket(
+                    sock, server_hostname=info["host"]
+                )
+            sock.settimeout(2)
+            payload = b""
+            if info["password"]:
+                payload += encode("AUTH", info["password"])
+            payload += encode("INFO", "memory")
+            payload += encode("DBSIZE")
+            sock.sendall(payload)
+
+            raw = b""
+            deadline = time.time() + 2
+            while time.time() < deadline:
+                chunk = sock.recv(8192)
+                if not chunk:
+                    break
+                raw += chunk
+                if b"used_memory:" in raw and b":" in raw.split(b"used_memory:")[1][:40] and b"\r\n" in raw and b":" in raw.split(b"used_memory:")[1] and b"\r\n" in raw.split(b"used_memory:")[1]:
+                    if b"\r\n:0\r\n" in raw or b"\r\n:1\r\n" in raw or (raw.count(b"\r\n:") >= 2):
+                        break
+
+        text = raw.decode(errors="replace")
+        used = None
+        for line in text.splitlines():
+            if line.startswith("used_memory:"):
+                try:
+                    used = int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
+                break
+        keys = None
+        # DBSIZE response is the last integer reply "+:N\r\n"
+        replies = [int(p[1:]) for p in text.replace("\r\n", "\n").split("\n") if p.startswith(":")]
+        if replies:
+            keys = replies[-1]
+        status = "healthy" if used is not None else "warning"
+        return {"bytes": used, "keys": keys, "status": status,
+                "detail": f"{info['host']}:{info['port']} db{info['db']}"}
+    except Exception as e:
+        return {"bytes": None, "keys": None, "status": "critical",
+                "detail": f"unreachable: {e}"}
 
 
 def _parse_redis_url(url: str) -> dict:
@@ -768,6 +968,7 @@ def api_topology_json(request):
 
     # Real health probes for ApotekApps backing services
     db_status, db_detail = _probe_apotek_db()
+    pg = _postgres_size()
     redis_status, redis_detail, redis_meta = _probe_redis()
     media_status, media_detail, media_meta = _probe_media()
     nginx_status, nginx_detail, nginx_meta = _probe_nginx()
@@ -785,9 +986,16 @@ def api_topology_json(request):
     edges = []
 
     # Core infrastructure nodes
+    pg_parts = [db_detail]
+    if pg.get("members") is not None:
+        pg_parts.append(f"Member: {pg['members']}")
+    if pg.get("points") is not None:
+        pg_parts.append(f"Poin: {pg['points']}")
+    pg_detail_full = " · ".join(p for p in pg_parts if p)
     nodes.append({
         "id": "pg", "label": "PostgreSQL", "kind": "database",
-        "tech": "PostgreSQL 16", "status": db_status, "detail": db_detail,
+        "tech": "PostgreSQL 16", "status": db_status, "detail": pg_detail_full,
+        "members": pg.get("members"), "points": pg.get("points"),
     })
     if redis_meta.get("version"):
         redis_tech = f"Redis {redis_meta['version']} · db{redis_meta.get('db', 0)}"
@@ -911,6 +1119,20 @@ def api_topology_json(request):
                   "label": "notify"})
     edges.append({"from": "system", "to": "email", "requests_5m": 0, "status": system_status,
                   "label": "hosts"})
+
+    # Member card — loyalty monitoring (member count + total poin from PostgreSQL)
+    member_count = pg.get("members")
+    member_points = pg.get("points")
+    member_status = "healthy" if member_count is not None else "warning"
+    nodes.append({
+        "id": "member", "label": "Member", "kind": "service",
+        "tech": "Loyalty · Poin", "status": member_status,
+        "members": member_count, "points": member_points,
+        "detail": (f"Member: {member_count} · Poin: {member_points}"
+                   if member_count is not None else "data tidak tersedia"),
+    })
+    edges.append({"from": "pg", "to": "member", "requests_5m": 0, "status": member_status,
+                  "label": "members"})
 
     # overall health — 4xx is "reachable" (endpoint responded), not an outage.
     total_all = APIRequestLog.objects.filter(created_at__gte=since).count()
