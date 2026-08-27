@@ -10,8 +10,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
-from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert
+from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight
 from .services import call_api
+from .ai_insight import generate_ai_insight
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -879,6 +880,25 @@ def api_topology_json(request):
             "system": {"status": system_status, "detail": system_detail, **system_meta},
         },
         "server_time": now.isoformat(),
+    })
+
+
+@login_required
+def api_ai_insight(request):
+    """Return the latest persisted AI insight.
+
+    If ``?refresh=1`` is passed, a fresh insight is generated (and saved);
+    otherwise a recent (<60s) cached row is reused to avoid spamming the DB on
+    every poll.
+    """
+    force = request.GET.get("refresh") == "1"
+    row = generate_ai_insight(force=force)
+    return JsonResponse({
+        "severity": row.severity,
+        "summary": row.summary,
+        "details": row.details,
+        "metrics": row.metrics,
+        "created_at": row.created_at.isoformat(),
     })
 
 
