@@ -178,7 +178,7 @@ def _infra_health():
     # imported lazily to avoid a circular import (views <-> ai_insight)
     from .views import (
         _probe_apotek_db, _probe_redis, _probe_media,
-        _probe_nginx, _probe_python, _probe_system,
+        _probe_nginx, _probe_python, _probe_system, _probe_email,
     )
     sev_map = {
         "healthy": AiInsight.SEVERITY_SUCCESS,
@@ -192,6 +192,7 @@ def _infra_health():
         ("Nginx", _probe_nginx),
         ("Python Runtime", _probe_python),
         ("System Host", _probe_system),
+        ("Email Monitor", _probe_email),
     ]
     out = []
     for name, fn in probes:

@@ -724,6 +724,21 @@ def _probe_system():
     return worst, detail, meta
 
 
+def _probe_email():
+    """Probe the configured SMTP server for email delivery health."""
+    from django.conf import settings
+    host = getattr(settings, "EMAIL_HOST", "") or ""
+    port = int(getattr(settings, "EMAIL_PORT", 25) or 25)
+    if not host:
+        return "warning", "SMTP belum dikonfigurasi (EMAIL_HOST kosong).", {}
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout=3):
+            return "healthy", f"SMTP terhubung · {host}:{port}", {"host": host, "port": port}
+    except Exception as e:
+        return "critical", f"SMTP unreachable: {e}", {"host": host, "port": port}
+
+
 @login_required
 def api_topology_json(request):
     """Dynatrace-style smartscape: services as nodes, traffic as edges, live health."""
@@ -737,6 +752,7 @@ def api_topology_json(request):
     nginx_status, nginx_detail, nginx_meta = _probe_nginx()
     python_status, python_detail, python_meta = _probe_python()
     system_status, system_detail, system_meta = _probe_system()
+    email_status, email_detail, email_meta = _probe_email()
 
     # Build nodes from monitored endpoints (grouped by module = service)
     eps = APIEndpoint.objects.filter(is_active=True)
@@ -796,6 +812,11 @@ def api_topology_json(request):
     nodes.append({
         "id": "monitor_db", "label": "Monitor SQLite", "kind": "database",
         "tech": "SQLite", "status": "healthy",
+    })
+    nodes.append({
+        "id": "email", "label": "Email Monitor", "kind": "service",
+        "tech": f"SMTP · {email_meta.get('host', 'n/a')}:{email_meta.get('port', '')}",
+        "status": email_status, "detail": email_detail,
     })
     # host-level runtime & web server
     nodes.append({
@@ -860,6 +881,10 @@ def api_topology_json(request):
                   "label": "hosts"})
     edges.append({"from": "apps_api", "to": "monitor", "requests_5m": 0, "status": apps_status})
     edges.append({"from": "monitor", "to": "monitor_db", "requests_5m": 0, "status": "healthy"})
+    edges.append({"from": "monitor", "to": "email", "requests_5m": 0, "status": email_status,
+                  "label": "notify"})
+    edges.append({"from": "system", "to": "email", "requests_5m": 0, "status": system_status,
+                  "label": "hosts"})
 
     # overall health
     total_all = APIRequestLog.objects.filter(created_at__gte=since).count()
