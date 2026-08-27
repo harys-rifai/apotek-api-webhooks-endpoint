@@ -17,6 +17,7 @@ urlpatterns = [
     path("api/stats/", views.api_stats_json, name="api_stats_json"),
     path("api/activity/", views.api_activity_json, name="api_activity_json"),
     path("api/db-sizes/", views.api_db_sizes, name="api_db_sizes"),
+    path("api/db-vacuum/", views.api_db_vacuum, name="api_db_vacuum"),
     path("api/topology/", views.api_topology_json, name="api_topology_json"),
     path("api/ai-insight/", views.api_ai_insight, name="api_ai_insight"),
     path("api/backup/sync/", views.api_backup_sync, name="api_backup_sync"),

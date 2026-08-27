@@ -196,6 +196,16 @@
     grid-column:2 / 4; font-size:.66rem; color:#c8cdf0;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .db-size__sub b { color:#36ff9e; font-variant-numeric:tabular-nums; }
+  .db-size__vacuum {
+    grid-column:2 / 4; margin-top:.25rem; justify-self:start;
+    background:transparent; border:1px solid var(--color-border,#2a2a40);
+    color:#9aa6d6; border-radius:6px; padding:.18rem .5rem; cursor:pointer;
+    font-size:.66rem; display:inline-flex; align-items:center; gap:.3rem;
+    transition:color .15s ease, border-color .15s ease; }
+  .db-size__vacuum:hover { color:#36e0ff; border-color:#36e0ff; }
+  .db-size__vacuum:disabled { opacity:.5; cursor:default; }
+  .db-size__vacuum.spin i { animation: dbSpin .7s linear infinite; }
+  .db-size__vacuum.ok { color:#36ff9e; border-color:#36ff9e; }
   .db-size__row[data-status="healthy"] .db-size__val { color:#36ff9e; }
   .db-size__row[data-status="warning"] .db-size__val { color:#ffd23f; }
   .db-size__row[data-status="critical"] .db-size__val { color:#ff4d6d; }
@@ -280,12 +290,18 @@
         <span class="db-size__name">SQLite (Monitor)</span>
         <span class="db-size__val" id="dbSqlite">—</span>
         <span class="db-size__meta" id="dbSqliteMeta"></span>
+        <button type="button" class="db-size__vacuum" id="dbSqliteVacuumBtn" title="Jalankan VACUUM (SQLite)">
+          <i class="fa-solid fa-wind"></i> VACUUM
+        </button>
       </li>
       <li class="db-size__row" data-store="postgres">
         <span class="db-size__icon"><i class="fa-solid fa-database" style="color:#36e0ff"></i></span>
         <span class="db-size__name">PostgreSQL (ApotekApps)</span>
         <span class="db-size__val" id="dbPg">—</span>
         <span class="db-size__meta" id="dbPgMeta"></span>
+        <button type="button" class="db-size__vacuum" id="dbVacuumBtn" title="Jalankan VACUUM FULL">
+          <i class="fa-solid fa-wind"></i> VACUUM FULL
+        </button>
         <span class="db-size__sub" id="dbPgSub"></span>
       </li>
       <li class="db-size__row" data-store="redis">
@@ -594,7 +610,7 @@
     const metric = el("text", { class: "node-metric", x: w/2 - 10, y: h/2 - 9,
       "text-anchor": "end", fill: statusColor });
     let metricTxt = "";
-    if (n.id === "pg" && n.members != null) {
+    if ((n.id === "pg" || n.id === "member") && n.members != null) {
       metricTxt = `M:${n.members} P:${n.points ?? 0}`;
     }
     else if (n.latency_ms != null) metricTxt = n.latency_ms + " ms";
@@ -984,12 +1000,6 @@
         setStore(dbSizeRows.sqlite, dbSqliteEl, dbSqliteMetaEl, d.sqlite);
         setStore(dbSizeRows.postgres, dbPgEl, dbPgMetaEl, d.postgres);
         setStore(dbSizeRows.redis, dbRedisEl, dbRedisMetaEl, d.redis);
-        if (dbPgSubEl && d.postgres) {
-          const bits = [];
-          if (d.postgres.members != null) bits.push("Member: <b>" + d.postgres.members + "</b>");
-          if (d.postgres.points != null) bits.push("Poin: <b>" + d.postgres.points + "</b>");
-          dbPgSubEl.innerHTML = bits.join(" &nbsp;·&nbsp; ");
-        }
       }
     } catch (e) { /* abaikan gagal ambil ukuran db */ }
     finally {
@@ -1004,6 +1014,37 @@
   refreshDbSizes();
   setInterval(refreshDbSizes, DB_REFRESH_MS);
   setInterval(renderDbCountdown, 1000);
+
+  // ── VACUUM FULL (PostgreSQL) ─────────────────────────────────────
+  const dbVacuumBtn = document.getElementById("dbVacuumBtn");
+  if (dbVacuumBtn) {
+    dbVacuumBtn.addEventListener("click", async () => {
+      dbVacuumBtn.disabled = true;
+      dbVacuumBtn.classList.add("spin");
+      dbVacuumBtn.classList.remove("ok");
+      try {
+        const res = await fetch("{% url 'api_db_vacuum' %}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json",
+                     "X-Requested-With": "XMLHttpRequest",
+                     "X-CSRFToken": getCookie("csrftoken") },
+        });
+        const d = await res.json().catch(() => ({}));
+        if (d.ok) {
+          dbVacuumBtn.classList.add("ok");
+          dbVacuumBtn.title = d.detail || "VACUUM FULL selesai";
+          refreshDbSizes();
+        } else {
+          dbVacuumBtn.title = "Gagal: " + (d.error || "unknown");
+        }
+      } catch (e) {
+        dbVacuumBtn.title = "Gagal menjalankan VACUUM FULL";
+      } finally {
+        dbVacuumBtn.disabled = false;
+        dbVacuumBtn.classList.remove("spin");
+      }
+    });
+  }
 
   function netInWindowInc() { _inWindow++; }
   setInterval(() => {

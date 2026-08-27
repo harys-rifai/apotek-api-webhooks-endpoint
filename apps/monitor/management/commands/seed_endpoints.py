@@ -6,10 +6,21 @@ from django.core.management.base import BaseCommand
 from apps.monitor.models import APIEndpoint
 
 ENDPOINTS = [
+    # Login (modul terpisah)
+    ("Login",           "POST", "/auth/login/",        "login"),
+    ("Login OAuth",     "POST", "/auth/login/oauth/",  "login"),
+    # Register (modul terpisah)
+    ("Register",        "POST", "/auth/register/",     "register"),
+    ("Verify OTP",      "POST", "/auth/register/verify/", "register"),
+    # POS — Apotek
+    ("POS Scan",        "POST", "/pos/scan/",          "pos"),
+    ("POS Apotek",      "GET",  "/pos/apotek/",        "pos"),
+    ("POS Checkout",    "POST", "/pos/checkout/",      "pos"),
+    # Feature2
+    ("Feature2 Index",  "GET",  "/feature2/",          "feature2"),
+    ("Feature2 Submit", "POST", "/feature2/submit/",   "feature2"),
     # Auth
-    ("Login",           "POST", "/auth/login/",    "auth"),
     ("Refresh Token",   "POST", "/auth/refresh/",  "auth"),
-    ("Register",        "POST", "/auth/register/", "auth"),
     ("Profile",         "GET",  "/auth/profile/",  "auth"),
     # Users
     ("List Users",      "GET",  "/users/",              "users"),

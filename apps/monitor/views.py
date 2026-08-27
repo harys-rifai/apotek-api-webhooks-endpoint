@@ -416,6 +416,52 @@ def api_db_sizes(request):
     return JsonResponse(data)
 
 
+@login_required
+@require_POST
+def api_db_vacuum(request):
+    """Jalankan VACUUM FULL pada PostgreSQL ApotekApps untuk memperkecil ukuran
+    file dan mengembalikan ruang yang tidak terpakai."""
+    import socket
+
+    cfg = _apotek_apps_config()
+    host = cfg("DB_HOST", "localhost")
+    port = int(cfg("DB_PORT", 5432))
+    name = cfg("DB_NAME", "apotek_pos")
+    user = cfg("DB_USER", "postgres")
+    password = cfg("DB_PASSWORD", "")
+
+    try:
+        import psycopg
+        _connect = lambda: psycopg.connect(
+            host=host, port=port, dbname=name, user=user,
+            password=password, connect_timeout=5, autocommit=True,
+        )
+    except ImportError:
+        try:
+            import psycopg2
+            _connect = lambda: psycopg2.connect(
+                host=host, port=port, dbname=name, user=user,
+                password=password, connect_timeout=5,
+            )
+        except ImportError:
+            return JsonResponse(
+                {"ok": False, "error": "no postgres driver (psycopg/psycopg2)"}, status=500)
+
+    try:
+        # VACUUM FULL cannot run inside a transaction block
+        conn = _connect()
+        try:
+            conn.autocommit = True
+        except Exception:
+            pass
+        with conn.cursor() as cur:
+            cur.execute("VACUUM FULL")
+        conn.close()
+        return JsonResponse({"ok": True, "detail": f"VACUUM FULL selesai · {name}@{host}:{port}"})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"VACUUM FULL gagal: {e}"}, status=500)
+
+
 def _apotek_apps_dir():
     """Best-effort path to the sibling ApotekApps project."""
     import os
@@ -1121,9 +1167,11 @@ def api_topology_json(request):
                   "label": "hosts"})
 
     # Member card — loyalty monitoring (member count + total poin from PostgreSQL)
+    # Sama seperti node modul: "idle" bila tidak ada aktivitas terbaru, "warning"
+    # hanya bila pembacaan data gagal.
     member_count = pg.get("members")
     member_points = pg.get("points")
-    member_status = "healthy" if member_count is not None else "warning"
+    member_status = "idle" if member_count is not None else "warning"
     nodes.append({
         "id": "member", "label": "Member", "kind": "service",
         "tech": "Loyalty · Poin", "status": member_status,
