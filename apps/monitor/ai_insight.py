@@ -41,12 +41,17 @@ def generate_ai_insight(force=False):
     ).count()
 
     # module health (reuse the same 5m window the topology uses)
+    # Availability: 4xx (client_error) counts as "reachable", not a failure —
+    # a write endpoint rejecting an empty probe body is expected, not an outage.
     modules = {}
     for ep in APIEndpoint.objects.filter(is_active=True):
         q = APIRequestLog.objects.filter(endpoint=ep, created_at__gte=since)
         t = q.count()
         if t:
-            r = round(q.filter(status="success").count() / t * 100, 1)
+            reachable = (q.filter(status="success").count()
+                         + q.filter(status="fail", status_code__gte=400,
+                                    status_code__lt=500).count())
+            r = round(reachable / t * 100, 1)
             modules[ep.module] = min(modules.get(ep.module, 100.0), r)
 
     critical_mods = [m for m, r in modules.items() if r < 80]

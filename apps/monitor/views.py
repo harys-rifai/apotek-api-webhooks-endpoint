@@ -67,10 +67,16 @@ def dashboard(request):
 
 @login_required
 def endpoint_list(request):
+    # "fail" excludes client errors (4xx) from empty/synthetic probes — those
+    # mean the endpoint is reachable and responded, not an outage. Only 5xx /
+    # timeout / connection errors count as real failures.
     endpoints = APIEndpoint.objects.annotate(
         total=Count("logs"),
         success=Count("logs", filter=Q(logs__status="success")),
-        fail=Count("logs", filter=Q(logs__status="fail")),
+        fail=Count("logs", filter=Q(
+            Q(logs__status="fail", logs__status_code__gte=500)
+            | Q(logs__status="error")
+        )),
     ).order_by("module", "name")
 
     context = {"endpoints": endpoints, "active_menu": "endpoints"}
@@ -96,10 +102,16 @@ def _stats_for_period_for_endpoint(ep, days=7):
     qs = APIRequestLog.objects.filter(endpoint=ep, created_at__gte=since)
     total = qs.count()
     success = qs.filter(status="success").count()
-    fail = qs.filter(status="fail").count()
+    # 4xx (client_error) is "reachable", not a failure — only 5xx/error are.
+    fail = qs.filter(
+        Q(status="fail", status_code__gte=500) | Q(status="error")
+    ).count()
     error = qs.filter(status="error").count()
     avg_ms = qs.aggregate(a=Avg("response_time_ms"))["a"] or 0
-    rate = round((success / total * 100), 1) if total else 0
+    reachable = success + qs.filter(
+        status="fail", status_code__gte=400, status_code__lt=500
+    ).count()
+    rate = round((reachable / total * 100), 1) if total else 0
     return {
         "total": total, "success": success, "fail": fail,
         "error": error, "avg_ms": round(avg_ms, 1), "success_rate": rate,
@@ -736,7 +748,9 @@ def _probe_email():
         with socket.create_connection((host, port), timeout=3):
             return "healthy", f"SMTP terhubung · {host}:{port}", {"host": host, "port": port}
     except Exception as e:
-        return "critical", f"SMTP unreachable: {e}", {"host": host, "port": port}
+        # Email is a non-critical notification channel — its outage does not
+        # take down the API, so report it as warning, not critical.
+        return "warning", f"SMTP unreachable: {e}", {"host": host, "port": port}
 
 
 @login_required
@@ -844,9 +858,14 @@ def api_topology_json(request):
     for mod, ep_list in modules.items():
         q = APIRequestLog.objects.filter(endpoint__in=ep_list, created_at__gte=since)
         total = q.count()
+        # Availability: 4xx (client_error) is "reachable", not a failure.
+        # Only 5xx / timeout / connection errors count as outages.
         succ = q.filter(status="success").count()
+        reachable = succ + q.filter(
+            status="fail", status_code__gte=400, status_code__lt=500
+        ).count()
         avg = q.aggregate(a=Avg("response_time_ms"))["a"] or 0
-        rate = round(succ / total * 100, 1) if total else 100
+        rate = round(reachable / total * 100, 1) if total else 100
         status = "healthy" if rate >= 95 else ("warning" if rate >= 80 else "critical")
         if total == 0:
             status = "idle"
@@ -886,20 +905,25 @@ def api_topology_json(request):
     edges.append({"from": "system", "to": "email", "requests_5m": 0, "status": system_status,
                   "label": "hosts"})
 
-    # overall health
+    # overall health — 4xx is "reachable" (endpoint responded), not an outage.
     total_all = APIRequestLog.objects.filter(created_at__gte=since).count()
     succ_all = APIRequestLog.objects.filter(created_at__gte=since, status="success").count()
-    overall = round(succ_all / total_all * 100, 1) if total_all else 100
+    reachable_all = succ_all + APIRequestLog.objects.filter(
+        created_at__gte=since, status="fail",
+        status_code__gte=400, status_code__lt=500,
+    ).count()
+    overall = round(reachable_all / total_all * 100, 1) if total_all else 100
 
-    # overall STATUS combines API success rate with core infra health, so a
-    # critical host/DB surfaces on the top "Overall" indicator, not just the node.
-    infra_statuses = [db_status, redis_status, media_status, nginx_status,
-                      python_status, system_status]
-    if system_status == "critical" or db_status == "critical":
+    # overall STATUS combines API availability with CORE infra health only
+    # (DB, Redis, Media, Nginx, Python, System). Non-fatal channels like Email
+    # are excluded so a missing SMTP server cannot flip the whole system critical.
+    core_infra = [db_status, redis_status, media_status, nginx_status,
+                  python_status, system_status]
+    if db_status == "critical":
         overall_status = "critical"
-    elif "critical" in infra_statuses or overall < 80:
+    elif "critical" in core_infra or overall < 80:
         overall_status = "critical"
-    elif "warning" in infra_statuses or overall < 95:
+    elif "warning" in core_infra or overall < 95:
         overall_status = "warning"
     else:
         overall_status = "healthy"

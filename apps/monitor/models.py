@@ -114,6 +114,22 @@ class APIRequestLog(models.Model):
     def is_slow(self):
         return self.response_time_ms is not None and self.response_time_ms > 2000
 
+    @property
+    def health_status(self):
+        """Status untuk health-check availability.
+
+        Untuk probe otomatis, `4xx` (client error) berarti endpoint tetap
+        terjangkau & merespons — bukan outage. Hanya `5xx`/timeout/connection
+        error yang dihitung sebagai kegagalan availability. Sebaliknya `4xx`
+        dari body kosong (mis. POST login tanpa payload) adalah ekspektasi,
+        bukan indikasi layanan mati.
+        """
+        if self.status == self.STATUS_ERROR:
+            return "error"
+        if self.status_code and 400 <= self.status_code < 500:
+            return "client_error"
+        return self.status  # success / fail
+
 
 class Alert(models.Model):
     """Alert/notification tersimpan (mis. perubahan status node topologi)."""
