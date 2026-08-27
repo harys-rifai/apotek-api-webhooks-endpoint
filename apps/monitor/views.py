@@ -866,10 +866,24 @@ def api_topology_json(request):
     succ_all = APIRequestLog.objects.filter(created_at__gte=since, status="success").count()
     overall = round(succ_all / total_all * 100, 1) if total_all else 100
 
+    # overall STATUS combines API success rate with core infra health, so a
+    # critical host/DB surfaces on the top "Overall" indicator, not just the node.
+    infra_statuses = [db_status, redis_status, media_status, nginx_status,
+                      python_status, system_status]
+    if system_status == "critical" or db_status == "critical":
+        overall_status = "critical"
+    elif "critical" in infra_statuses or overall < 80:
+        overall_status = "critical"
+    elif "warning" in infra_statuses or overall < 95:
+        overall_status = "warning"
+    else:
+        overall_status = "healthy"
+
     return JsonResponse({
         "nodes": nodes,
         "edges": edges,
         "overall_success_rate": overall,
+        "overall_status": overall_status,
         "total_requests_5m": total_all,
         "infra": {
             "postgres": {"status": db_status, "detail": db_detail},

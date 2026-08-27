@@ -691,9 +691,11 @@
     fitView();
 
     document.getElementById("overall").textContent = data.overall_success_rate + "%";
+    const ovStatus = data.overall_status || (data.overall_success_rate >= 95 ? "healthy"
+      : data.overall_success_rate >= 80 ? "warning" : "critical");
     document.getElementById("overall").style.color =
-      data.overall_success_rate >= 95 ? COLOR.healthy :
-      data.overall_success_rate >= 80 ? COLOR.warning : COLOR.critical;
+      ovStatus === "critical" ? COLOR.critical :
+      ovStatus === "warning" ? COLOR.warning : COLOR.healthy;
     document.getElementById("req5m").textContent = data.total_requests_5m;
     document.getElementById("nodeCount").textContent = data.nodes.length;
   }

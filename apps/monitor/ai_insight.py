@@ -124,14 +124,18 @@ def generate_ai_insight(force=False):
 
     # 5. Infrastructure (PostgreSQL, Redis, Media, Nginx, Python, System host)
     infra = _infra_health()
+    critical_infra = []
+    warning_infra = []
     if infra:
         worst_infra = AiInsight.SEVERITY_SUCCESS
         for comp in infra:
             sev = comp["severity"]
             if sev == AiInsight.SEVERITY_CRITICAL:
                 worst_infra = AiInsight.SEVERITY_CRITICAL
+                critical_infra.append(comp["name"])
             elif sev == AiInsight.SEVERITY_WARNING and worst_infra != AiInsight.SEVERITY_CRITICAL:
                 worst_infra = AiInsight.SEVERITY_WARNING
+                warning_infra.append(comp["name"])
             details.append({
                 "label": comp["name"],
                 "value": comp["value"],
@@ -143,14 +147,15 @@ def generate_ai_insight(force=False):
             severity = AiInsight.SEVERITY_WARNING
 
     # 6. AI suggestion / recommendation
-    suggestion = _suggestion(total, rate, fail, wh_total, wh_fail, critical_mods, warning_mods)
+    suggestion = _suggestion(total, rate, fail, wh_total, wh_fail,
+                              critical_mods, warning_mods, critical_infra, warning_infra)
     details.append({
         "label": "Saran AI",
         "value": suggestion,
         "severity": severity,
     })
 
-    summary = _headline(total, rate, wh_total, critical_mods, severity)
+    summary = _headline(total, rate, wh_total, critical_mods, severity, critical_infra)
 
     row = AiInsight.objects.create(
         summary=summary,
@@ -211,11 +216,21 @@ def _infra_health():
     return out
 
 
-def _suggestion(total, rate, fail, wh_total, wh_fail, critical_mods, warning_mods):
+def _suggestion(total, rate, fail, wh_total, wh_fail, critical_mods, warning_mods,
+                critical_infra=None, warning_infra=None):
+    critical_infra = critical_infra or []
+    warning_infra = warning_infra or []
     if total == 0:
-        return ("Jalankan `python manage.py simulate_traffic` untuk menghasilkan "
+        base = ("Jalankan `python manage.py simulate_traffic` untuk menghasilkan "
                 "lalu lintas demo, atau pastikan ApotekApps mengirim request nyata "
                 "ke endpoint yang dipantau.")
+        if critical_infra:
+            return (f"INFRA KRITIS: {', '.join(critical_infra)}. {base}")
+        return base
+    if critical_infra:
+        return (f"Infrastruktur kritis: {', '.join(critical_infra)}. "
+                "Periksa resource host (disk/memori/CPU load), bebaskan kapasitas, "
+                "dan restart layanan terdampak jika perlu.")
     if critical_mods:
         return (f"Prioritaskan modul {', '.join(sorted(critical_mods))}: cek log error, "
                 "naikkan resource, dan evaluasi dependensi (DB/redis). Aktifkan retry "
@@ -226,14 +241,19 @@ def _suggestion(total, rate, fail, wh_total, wh_fail, critical_mods, warning_mod
     if wh_fail:
         return ("Beberapa webhook gagal diproses. Validasi payload dan ulangi (replay) "
                 "webhook yang failed dari panel Webhooks.")
-    if warning_mods:
-        return (f"Modul {', '.join(sorted(warning_mods))} mulai menurun. Pantau tren "
-                "sebelum menyentuh ambang kritis (80%).")
+    if warning_mods or warning_infra:
+        parts = []
+        if warning_mods: parts.append(f"modul {', '.join(sorted(warning_mods))}")
+        if warning_infra: parts.append(f"infra {', '.join(warning_infra)}")
+        return f"{' dan '.join(parts).capitalize()} mulai menurun. Pantau tren sebelum menyentuh ambang kritis."
     return ("Sistem dalam kondisi optimal. Tidak ada tindakan diperlukan; lanjutkan "
             "pemantauan rutin.")
 
 
-def _headline(total, rate, wh_total, critical_mods, severity):
+def _headline(total, rate, wh_total, critical_mods, severity, critical_infra=None):
+    critical_infra = critical_infra or []
+    if critical_infra:
+        return f"Infrastruktur kritis: {', '.join(critical_infra)}. Perlu perhatian segera."
     if total == 0:
         return "Sistem idle - tidak ada lalu lintas terdeteksi dalam 5 menit."
     if severity == AiInsight.SEVERITY_CRITICAL:

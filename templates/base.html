@@ -5,10 +5,19 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{% block title %}OrchestrationApps{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20260825h"/>
-  <link rel="stylesheet" href="{% static 'css/main.css' %}?v=20260825h"/>
+  <link rel="stylesheet" href="{% static 'css/theme.css' %}?v=20260827c"/>
+  <link rel="stylesheet" href="{% static 'css/main.css' %}?v=20260827c"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous"/>
   {% block extra_head %}{% endblock %}
+  <script>
+    // apply saved theme before paint to avoid flash
+    (function () {
+      try {
+        var t = localStorage.getItem("theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="app-layout">
 
@@ -26,7 +35,7 @@
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="{% static 'js/main.js' %}?v=20260825h"></script>
+  <script src="{% static 'js/main.js' %}?v=20260827c"></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

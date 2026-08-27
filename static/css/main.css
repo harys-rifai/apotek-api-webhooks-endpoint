@@ -154,6 +154,20 @@
   font-size: .82rem;
 }
 
+.navbar__theme {
+  display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 10px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border-color);
+  color: var(--text-secondary); font-size: .95rem;
+  transition: var(--transition);
+}
+.navbar__theme:hover {
+  color: var(--neon-cyan); border-color: var(--border-active);
+  background: var(--neon-cyan-dim);
+}
+[data-theme="light"] .navbar__theme { color: #b8860b; }
+[data-theme="light"] .navbar__theme:hover { color: #b8860b; }
+
 .navbar__user {
   display: flex; align-items: center; gap: 8px;
   font-weight: 600; color: var(--text-primary);

@@ -13,6 +13,24 @@ if (clockEl) {
   setInterval(tick, 1000);
 }
 
+// ── Theme toggle (dark / light) ─────────────────────────────
+const themeToggle = document.getElementById("themeToggle");
+if (themeToggle) {
+  const icon = themeToggle.querySelector("i");
+  const syncIcon = () => {
+    const light = document.documentElement.getAttribute("data-theme") === "light";
+    icon.className = light ? "fa-solid fa-sun" : "fa-solid fa-moon";
+  };
+  syncIcon();
+  themeToggle.addEventListener("click", () => {
+    const light = document.documentElement.getAttribute("data-theme") === "light";
+    const next = light ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("theme", next); } catch (e) {}
+    syncIcon();
+  });
+}
+
 // ── Toast helper ──────────────────────────────────────────────
 window.showToast = function(msg, type = "success") {
 
