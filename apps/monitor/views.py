@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
-from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight
+from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight, NodeLayout
 from .services import call_api
 from .ai_insight import generate_ai_insight
 
@@ -910,6 +910,7 @@ def api_topology_json(request):
         "overall_success_rate": overall,
         "overall_status": overall_status,
         "total_requests_5m": total_all,
+        "positions": {nl.node_id: {"x": nl.x, "y": nl.y} for nl in NodeLayout.objects.all()},
         "infra": {
             "postgres": {"status": db_status, "detail": db_detail},
             "redis": {"status": redis_status, "detail": redis_detail, **redis_meta},
@@ -920,6 +921,28 @@ def api_topology_json(request):
         },
         "server_time": now.isoformat(),
     })
+
+
+@login_required
+@require_POST
+def api_topology_layout(request):
+    """Save manually-dragged node positions as the new default layout."""
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"ok": False, "error": "invalid json"}, status=400)
+    positions = payload.get("positions")
+    if not isinstance(positions, dict):
+        return JsonResponse({"ok": False, "error": "positions required"}, status=400)
+    saved = 0
+    for node_id, pos in positions.items():
+        try:
+            x = float(pos.get("x")); y = float(pos.get("y"))
+        except (TypeError, ValueError):
+            continue
+        NodeLayout.objects.update_or_create(node_id=node_id, defaults={"x": x, "y": y})
+        saved += 1
+    return JsonResponse({"ok": True, "saved": saved})
 
 
 @login_required

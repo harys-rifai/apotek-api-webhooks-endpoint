@@ -2,6 +2,20 @@ from django.db import models
 from django.utils import timezone
 
 
+class NodeLayout(models.Model):
+    """Posisi manual node pada topology smartscape (default setelah di-drag)."""
+    node_id = models.CharField(max_length=60, primary_key=True)
+    x = models.FloatField(default=0)
+    y = models.FloatField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["node_id"]
+
+    def __str__(self):
+        return f"{self.node_id} @ ({self.x},{self.y})"
+
+
 class AiInsight(models.Model):
     """Snapshot hasil analisis cerdas (AI) terhadap kondisi sistem/monitor."""
     SEVERITY_INFO = "info"

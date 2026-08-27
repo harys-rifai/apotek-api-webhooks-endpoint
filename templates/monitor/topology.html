@@ -413,7 +413,7 @@
       apps_api:   { x: 430, y: 420 },
       monitor:    { x: 760, y: 380 },
       monitor_db: { x: 980, y: 200 },
-      email:      { x: 980, y: 360 },
+      email:      { x: 760, y: 40 },
     };
     if (CORE[n.id]) return { x: CORE[n.id].x, y: CORE[n.id].y };
     // module services → flowing grid kept clear of the core nodes (far right)
@@ -592,12 +592,38 @@
       g.setAttribute("transform", `translate(${nx},${ny})`);
       redrawEdges();
     });
-    const endDrag = () => { if (dragId === n.id) g.setAttribute("opacity", "1"); };
+    const endDrag = () => {
+      if (dragId === n.id) {
+        g.setAttribute("opacity", "1");
+        saveLayout();
+      }
+    };
     g.addEventListener("pointerup", endDrag);
     g.addEventListener("pointerleave", endDrag);
 
     nodesLayer.appendChild(g);
     nodeState[n.id] = { x, y, g, statusColor, status: n.status, kind: n.kind };
+  }
+
+  // Persist current node positions as the new default layout (debounced).
+  let _saveTimer = null;
+  function saveLayout() {
+    const positions = {};
+    for (const id in nodeState) {
+      if (id === "_modOrder") continue;
+      if (nodeState[id] && nodeState[id].x != null) {
+        positions[id] = { x: Math.round(nodeState[id].x), y: Math.round(nodeState[id].y) };
+      }
+    }
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => {
+      fetch("{% url 'api_topology_layout' %}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest",
+                   "X-CSRFToken": getCookie("csrftoken") },
+        body: JSON.stringify({ positions }),
+      }).catch(() => {});
+    }, 400);
   }
 
   function drawEdge(e) {
@@ -669,12 +695,15 @@
       if (id === "_modOrder") continue;
       if (nodeState[id] && nodeState[id].x != null) userPos[id] = nodeState[id];
     }
+    // server-side saved layout (persisted drags) as fallback for untouched nodes
+    const savedPos = (data.positions && typeof data.positions === "object") ? data.positions : {};
 
     nodesLayer.innerHTML = "";
     nodeState = { _modOrder: nodeState._modOrder };
 
     data.nodes.forEach((n, i) => {
       if (userPos[n.id]) { n._x = userPos[n.id].x; n._y = userPos[n.id].y; }
+      else if (savedPos[n.id]) { n._x = savedPos[n.id].x; n._y = savedPos[n.id].y; }
       drawNode(n, i, data.nodes.length);
     });
 

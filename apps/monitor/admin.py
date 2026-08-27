@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight
+from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight, NodeLayout
+
+
+@admin.register(NodeLayout)
+class NodeLayoutAdmin(admin.ModelAdmin):
+    list_display = ["node_id", "x", "y", "updated_at"]
+    search_fields = ["node_id"]
 
 
 @admin.register(AiInsight)
