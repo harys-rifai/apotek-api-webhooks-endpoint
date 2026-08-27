@@ -946,6 +946,20 @@ def api_topology_layout(request):
 
 
 @login_required
+def api_backup_sync(request):
+    """Trigger an on-demand sync of Monitor data (Alert/AiInsight/NodeLayout)
+    from SQLite to the backup PostgreSQL. Intended to be polled periodically."""
+    from io import StringIO
+    from django.core.management import call_command
+    out = StringIO()
+    try:
+        call_command("sync_to_postgres", stdout=out)
+        return JsonResponse({"ok": True, "log": out.getvalue().strip()})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+
+@login_required
 def api_ai_insight(request):
     """Return the latest persisted AI insight.
 

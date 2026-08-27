@@ -964,6 +964,16 @@
   refreshAiInsight(false);
   setInterval(() => refreshAiInsight(false), 60000);   // auto-refresh every 1 minute
 
+  // ── Auto backup sync (SQLite → PostgreSQL) every 5 min ──
+  function autoBackupSync() {
+    fetch("{% url 'api_backup_sync' %}", { headers: { "X-Requested-With": "XMLHttpRequest" } })
+      .then(r => r.json())
+      .then(d => { if (!d.ok && d.error) console.warn("backup sync skipped:", d.error); })
+      .catch(() => {});
+  }
+  setInterval(autoBackupSync, 300000);   // 5 minutes
+  autoBackupSync();
+
   function connectStream() {
     if (streamBroken) return;
     const es = new EventSource("{% url 'api_network_stream' %}");

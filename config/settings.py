@@ -56,6 +56,25 @@ DATABASES = {
     }
 }
 
+# Optional backup replica (ApotekApps PostgreSQL). Activated automatically when
+# ApotekApps/.env exposes DB_* credentials. Used by `sync_to_postgres`.
+try:
+    import os as _os
+    from decouple import Config as _Cfg, RepositoryEnv as _RepoEnv
+    _apps_env = _os.path.join(_os.path.dirname(str(BASE_DIR)), "ApotekApps", ".env")
+    if _os.path.exists(_apps_env):
+        _c = _Cfg(_RepoEnv(_apps_env))
+        DATABASES["backup_pg"] = {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": _c.get("DB_NAME", "apotek_pos"),
+            "USER": _c.get("DB_USER", "postgres"),
+            "PASSWORD": _c.get("DB_PASSWORD", ""),
+            "HOST": _c.get("DB_HOST", "localhost"),
+            "PORT": _c.get("DB_PORT", "5432"),
+        }
+except Exception:
+    pass
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
