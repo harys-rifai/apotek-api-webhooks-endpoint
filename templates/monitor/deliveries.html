@@ -46,7 +46,7 @@
         </thead>
         <tbody>
           {% for d in deliveries %}
-          <tr>
+          <tr class="delivery-row">
             <td class="text-muted text-sm">{{ forloop.counter }}</td>
             <td class="text-mono text-sm">{{ d.order_ref|default:d.id|default:"—" }}</td>
             <td class="text-sm">{{ d.patient|default:d.destination|default:"—" }}</td>
@@ -73,5 +73,44 @@
       </table>
     </div>
   </div>
+  <div class="pagination-bar" id="deliveryPager">
+    <span class="page-info" id="deliveryInfo"></span>
+    <div class="page-actions">
+      <span class="page-size-label">Rows:</span>
+      <select id="deliveryPageSize" class="select-sm">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+        <option value="15">15</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="deliveryPrev">‹ Prev</button>
+      <button class="btn btn-outline btn-sm" id="deliveryNext">Next ›</button>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let _deliveryPage = 1, _deliveryPageSize = 10;
+function renderDeliveries() {
+  const all = [...document.querySelectorAll(".delivery-row")];
+  const total = all.length;
+  if (total === 0) { document.getElementById("deliveryPager").style.display = "none"; return; }
+  const pages = Math.ceil(total / _deliveryPageSize);
+  _deliveryPage = Math.max(1, Math.min(_deliveryPage, pages));
+  const start = (_deliveryPage - 1) * _deliveryPageSize;
+  all.forEach((r, i) => r.style.display = (i >= start && i < start + _deliveryPageSize) ? "" : "none");
+  document.getElementById("deliveryInfo").textContent =
+    `${start+1}–${Math.min(start + _deliveryPageSize, total)} dari ${total}`;
+  document.getElementById("deliveryPrev").disabled = _deliveryPage <= 1;
+  document.getElementById("deliveryNext").disabled = _deliveryPage >= pages;
+}
+document.getElementById("deliveryPrev").addEventListener("click", () => { _deliveryPage--; renderDeliveries(); });
+document.getElementById("deliveryNext").addEventListener("click", () => { _deliveryPage++; renderDeliveries(); });
+document.getElementById("deliveryPageSize").addEventListener("change", e => { _deliveryPageSize = +e.target.value; _deliveryPage = 1; renderDeliveries(); });
+renderDeliveries();
+</script>
 {% endblock %}

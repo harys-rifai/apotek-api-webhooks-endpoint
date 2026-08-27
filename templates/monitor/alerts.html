@@ -27,7 +27,7 @@
         </tr></thead>
         <tbody>
           {% for a in alerts %}
-          <tr class="{% if not a.is_read %}row-unread{% endif %}">
+          <tr class="alert-row {% if not a.is_read %}row-unread{% endif %}">
             <td>
               <span class="badge badge--{{ a.level }}">
                 <i class="fa-solid {{ a.icon }}"></i> {{ a.level }}
@@ -49,5 +49,44 @@
       </table>
     </div>
   </div>
+  <div class="pagination-bar" id="alertPager">
+    <span class="page-info" id="alertInfo"></span>
+    <div class="page-actions">
+      <span class="page-size-label">Rows:</span>
+      <select id="alertPageSize" class="select-sm">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+        <option value="15">15</option>
+        <option value="25">25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="alertPrev">‹ Prev</button>
+      <button class="btn btn-outline btn-sm" id="alertNext">Next ›</button>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let _alertPage = 1, _alertPageSize = 10;
+function renderAlerts() {
+  const all = [...document.querySelectorAll(".alert-row")];
+  const total = all.length;
+  if (total === 0) { document.getElementById("alertPager").style.display = "none"; return; }
+  const pages = Math.ceil(total / _alertPageSize);
+  _alertPage = Math.max(1, Math.min(_alertPage, pages));
+  const start = (_alertPage - 1) * _alertPageSize;
+  all.forEach((r, i) => r.style.display = (i >= start && i < start + _alertPageSize) ? "" : "none");
+  document.getElementById("alertInfo").textContent =
+    `${start+1}–${Math.min(start + _alertPageSize, total)} dari ${total}`;
+  document.getElementById("alertPrev").disabled = _alertPage <= 1;
+  document.getElementById("alertNext").disabled = _alertPage >= pages;
+}
+document.getElementById("alertPrev").addEventListener("click", () => { _alertPage--; renderAlerts(); });
+document.getElementById("alertNext").addEventListener("click", () => { _alertPage++; renderAlerts(); });
+document.getElementById("alertPageSize").addEventListener("change", e => { _alertPageSize = +e.target.value; _alertPage = 1; renderAlerts(); });
+renderAlerts();
+</script>
 {% endblock %}

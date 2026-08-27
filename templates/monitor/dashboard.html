@@ -111,6 +111,15 @@
       <div class="pagination-bar" id="topEpPager" style="display:none">
         <span class="page-info" id="topEpInfo"></span>
         <div class="page-actions">
+          <span class="page-size-label">Rows:</span>
+          <select id="topEpPageSize" class="select-sm">
+            <option value="5" selected>5</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
           <button class="btn btn-outline btn-sm" id="topEpPrev">‹ Prev</button>
           <button class="btn btn-outline btn-sm" id="topEpNext">Next ›</button>
         </div>
@@ -190,9 +199,12 @@
       <div class="page-actions">
         <span class="page-size-label">Rows:</span>
         <select id="recentLogsPageSize" class="select-sm">
+          <option value="5">5</option>
           <option value="10" selected>10</option>
-          <option value="20">20</option>
+          <option value="15">15</option>
+          <option value="25">25</option>
           <option value="50">50</option>
+          <option value="100">100</option>
         </select>
         <button class="btn btn-outline btn-sm" id="recentLogsPrev">‹</button>
         <button class="btn btn-outline btn-sm" id="recentLogsNext">›</button>
@@ -320,6 +332,7 @@ function renderTopEpTable(data, page) {
 
 document.getElementById("topEpPrev").addEventListener("click", () => renderTopEpTable(null, _epPage - 1));
 document.getElementById("topEpNext").addEventListener("click", () => renderTopEpTable(null, _epPage + 1));
+document.getElementById("topEpPageSize").addEventListener("change", e => { _epPageSize = +e.target.value; _epPage = 1; renderTopEpTable(null, 1); });
 
 // ── Recent Logs pagination ──
 let _logsPage = 1, _logsPageSize = 10;
