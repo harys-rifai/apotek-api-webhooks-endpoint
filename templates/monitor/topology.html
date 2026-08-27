@@ -111,6 +111,24 @@
     color:var(--color-muted); margin-bottom:.6rem; padding-bottom:.5rem;
     border-bottom:1px solid var(--color-border,#2a2a40); }
   .net-feed__stats b { color:#e8e8f0; margin-left:.15rem; }
+
+  /* ===== AI insight ===== */
+  .ai-insight {
+    background:linear-gradient(135deg, rgba(124,92,255,.14), rgba(54,224,255,.08));
+    border:1px solid rgba(124,92,255,.35);
+    border-radius:12px; padding:.6rem .7rem; margin-bottom:.6rem;
+  }
+  .ai-insight__head { display:flex; align-items:center; gap:.4rem; font-size:.78rem;
+    font-weight:700; color:#cdbcff; margin-bottom:.35rem; }
+  .ai-insight__head i { color:#9b8cff; }
+  .ai-insight__status { margin-left:auto; font-size:.66rem; font-weight:600;
+    color:var(--color-muted); padding:.05rem .4rem; border-radius:999px;
+    background:rgba(255,255,255,.06); }
+  .ai-insight__status.live { color:#36ff9e; background:rgba(54,255,158,.12); }
+  .ai-insight__status.thinking { color:#ffd23f; background:rgba(255,210,63,.12); }
+  .ai-insight__text { margin:0; font-size:.74rem; line-height:1.4; color:#d7d9f2; }
+  .ai-insight__text code { font-size:.7rem; background:rgba(255,255,255,.08);
+    padding:.05rem .25rem; border-radius:4px; color:#9b8cff; }
   .net-feed__list { list-style:none; margin:0; padding:0; overflow-y:auto; flex:1; }
   .net-feed__list li {
     display:flex; align-items:center; gap:.45rem; font-size:.74rem; padding:.32rem .15rem;
@@ -141,8 +159,8 @@
   <span class="topo-actions">
     <button class="filter-btn" id="zoomOut" title="Zoom out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
     <button class="filter-btn" id="zoomIn" title="Zoom in"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
-    <button class="filter-btn" id="resetView" title="Reset view"><i class="fa-solid fa-rotate-left"></i></button>
-    <button class="filter-btn" id="refreshView" title="Refresh"><i class="fa-solid fa-arrows-rotate"></i></button>
+    <button class="filter-btn" id="fullscreenView" title="Full screen"><i class="fa-solid fa-expand"></i></button>
+    <button class="filter-btn" id="refreshView" title="Refresh data"><i class="fa-solid fa-arrows-rotate"></i></button>
   </span>
 </div>
 
@@ -174,6 +192,20 @@
       <span>req <b id="netReq">0</b></span>
       <span>hook <b id="netWh">0</b></span>
     </div>
+
+    <!-- AI INSIGHT -->
+    <div class="ai-insight" id="aiInsight">
+      <div class="ai-insight__head">
+        <i class="fa-solid fa-brain"></i>
+        <span>AI Insight</span>
+        <span class="ai-insight__status" id="aiStatus">idle</span>
+      </div>
+      <ul class="ai-insight__list" id="aiText">
+        <li>Menunggu lalu lintas jaringan… Jalankan <code>simulate_traffic</code> untuk
+          melihat analisis cerdas secara langsung.</li>
+      </ul>
+    </div>
+
     <ul class="net-feed__list" id="netList"></ul>
   </aside>
   </div>
@@ -662,28 +694,54 @@
 
   // ── Zoom / reset buttons ───────────────────────────────────────────
   function zoomBy(factor) {
+    if (!nodeState || Object.keys(nodeState).length <= 1) return;
     const mx = view.x + view.w / 2, my = view.y + view.h / 2;
     let nw = Math.max(200, Math.min(4000, view.w * factor));
     let nh = nw * (VB_H / VB_W);
     view.x = mx - nw / 2; view.y = my - nh / 2; view.w = nw; view.h = nh;
     applyView();
+    viewInitialized = true;          // keep manual zoom across the 3s auto-fit
   }
   document.getElementById("zoomIn").addEventListener("click", () => zoomBy(0.85));
   document.getElementById("zoomOut").addEventListener("click", () => zoomBy(1.18));
-  document.getElementById("resetView").addEventListener("click", () => {
-    view = { x: 0, y: 0, w: VB_W, h: VB_H }; applyView();
-    viewInitialized = false; fitView();
+
+  // ── Full-screen toggle (uses the Fullscreen API on the canvas) ──
+  const fsBtn = document.getElementById("fullscreenView");
+  const fsTarget = document.getElementById("topoWrap");
+  function syncFsIcon() {
+    const on = !!document.fullscreenElement;
+    fsBtn.querySelector("i").className = on ? "fa-solid fa-compress" : "fa-solid fa-expand";
+    fsBtn.title = on ? "Exit full screen" : "Full screen";
+  }
+  fsBtn.addEventListener("click", async () => {
+    try {
+      if (!document.fullscreenElement) await fsTarget.requestFullscreen();
+      else await document.exitFullscreen();
+      syncFsIcon();
+    } catch (e) { console.warn("fullscreen unavailable:", e); }
   });
+  document.addEventListener("fullscreenchange", syncFsIcon);
+
+  // ── Refresh: refetch + brief spin feedback so the click is visible ──
   document.getElementById("refreshView").addEventListener("click", async () => {
+    const btn = document.getElementById("refreshView");
+    const icon = btn.querySelector("i");
+    if (btn.disabled) return;
+    btn.disabled = true;
+    icon.style.transition = "transform .6s linear";
+    icon.style.transform = "rotate(360deg)";
     viewInitialized = false;          // allow re-fit so all nodes stay visible
     await tick();
+    setTimeout(() => { icon.style.transform = ""; btn.disabled = false; }, 300);
   });
 
   let first = true;
+  let lastTopo = null;
   async function tick() {
     try {
       const r = await fetch("{% url 'api_topology_json' %}", { headers: { "X-Requested-With": "XMLHttpRequest" } });
       const d = await r.json();
+      lastTopo = d;
       render(d);
       const ps = document.getElementById("pollState");
       ps.textContent = "live"; ps.className = "stat badge--success";
@@ -697,7 +755,7 @@
     }
   }
   tick();
-  setInterval(tick, 3000);
+  setInterval(tick, 10000);
 
   // ── Live network stream (SSE) ──────────────────────────────────
   // Each "packet" event animates a one-shot travelling packet along the
@@ -783,6 +841,59 @@
       _inWindow = 0; _inWindowStart = now;
     }
   }, 1000);
+
+  // ── AI Insight (auto-refresh every 60s) ───────────────────────────
+  const aiTextEl = document.getElementById("aiText");
+  const aiStatusEl = document.getElementById("aiStatus");
+  let aiRateSamples = [];   // recent in/s samples for trend
+  let _aiRateLast = 0;
+
+  // sample the live in/s rate so the insight can describe the trend
+  setInterval(() => {
+    const r = parseInt(netInRateEl.textContent, 10) || 0;
+    aiRateSamples.push(r);
+    if (aiRateSamples.length > 10) aiRateSamples.shift();
+  }, 5000);
+
+  function buildAiInsight() {
+    const pkts = netPkts, req = netReq, wh = netWh;
+    const lastRate = aiRateSamples.length ? aiRateSamples[aiRateSamples.length - 1] : 0;
+    const avgRate = aiRateSamples.length
+      ? Math.round(aiRateSamples.reduce((a, b) => a + b, 0) / aiRateSamples.length) : 0;
+    const trend = aiRateSamples.length >= 3
+      ? (aiRateSamples[aiRateSamples.length - 1] - aiRateSamples[0]) : 0;
+
+    if (pkts === 0) {
+      return "Belum ada lalu lintas jaringan terdeteksi. Jalankan "
+        + "<code>simulate_traffic</code> untuk memulai pemantauan cerdas.";
+    }
+    const whShare = wh > 0 ? Math.round(wh / pkts * 100) : 0;
+    let verdict;
+    if (lastRate === 0 && pkts > 0) {
+      verdict = "Lalu lintas sebelumnya terhenti — sistem dalam kondisi diam (idle).";
+    } else if (trend > 1) {
+      verdict = `Volume naik ↗ (≈${avgRate}/dtk). Beban meningkat, pantau lonjakan.`;
+    } else if (trend < -1) {
+      verdict = `Volume turun ↘ (≈${avgRate}/dtk). Aktivitas mereda.`;
+    } else {
+      verdict = `Aliran stabil ≈${avgRate}/dtk. Tidak ada anomali besar.`;
+    }
+    return `${verdict} Total ${pkts} paket — ${req} request API, ${wh} webhook `
+      + `(${whShare}% hook).`;
+  }
+
+  function refreshAiInsight() {
+    aiStatusEl.textContent = "thinking"; aiStatusEl.className = "ai-insight__status thinking";
+    // brief "thinking" beat for a live-AI feel, then render summary
+    setTimeout(() => {
+      aiTextEl.innerHTML = buildAiInsight();
+      const live = netStateEl.classList.contains("live") || netPkts > 0;
+      aiStatusEl.textContent = live ? "live" : "idle";
+      aiStatusEl.className = "ai-insight__status " + (live ? "live" : "");
+    }, 450);
+  }
+  refreshAiInsight();
+  setInterval(refreshAiInsight, 60000);   // auto-refresh every 1 minute
 
   function connectStream() {
     if (streamBroken) return;
