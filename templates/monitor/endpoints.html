@@ -145,9 +145,24 @@ document.querySelectorAll(".ping-btn").forEach(btn => {
     try {
       const res  = await fetch(`/api/ping/${btn.dataset.id}/`);
       const data = await res.json();
-      const ok   = data.status === "success";
+      // 5xx / connection error = outage (red); 2xx-4xx = endpoint merespons (hijau)
+      const sc = data.status_code || 0;
+      const reachable = sc >= 200 && sc < 500;
+      const ok = data.status === "success" || reachable;
       showEpToast(`[${data.status_code || "ERR"}] ${btn.dataset.path} — ${data.response_time_ms}ms — ${data.status}`,
                   ok ? "success" : "error");
+      // auto-recalculate this row's counts in place
+      try {
+        const s = await (await fetch(`/api/endpoint/${btn.dataset.id}/stats/`,
+                      { headers: { "X-Requested-With": "XMLHttpRequest" } })).json();
+        const row = btn.closest("tr.ep-row");
+        if (row) {
+          const cells = row.children;
+          cells[5].textContent = s.total;        // Total
+          cells[6].textContent = s.success;      // Success
+          cells[7].textContent = s.fail;         // Fail
+        }
+      } catch (e) { /* stats refresh gagal — abaikan */ }
     } finally {
       btn.disabled = false; btn.textContent = "Ping";
     }

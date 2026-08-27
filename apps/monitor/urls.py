@@ -13,6 +13,7 @@ urlpatterns = [
     path("deliveries/", views.delivery_list, name="delivery_list"),
     # AJAX / API
     path("api/ping/<int:pk>/", views.api_ping, name="api_ping"),
+    path("api/endpoint/<int:pk>/stats/", views.api_endpoint_stats, name="api_endpoint_stats"),
     path("api/stats/", views.api_stats_json, name="api_stats_json"),
     path("api/activity/", views.api_activity_json, name="api_activity_json"),
     path("api/topology/", views.api_topology_json, name="api_topology_json"),

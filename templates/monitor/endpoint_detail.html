@@ -48,6 +48,12 @@
       <span class="kpi-card__value">{{ stats.success_rate }}%</span>
     </div>
   </div>
+  <div class="kpi-card kpi-card--avail">
+    <div class="kpi-card__body">
+      <span class="kpi-card__label">Availability</span>
+      <span class="kpi-card__value">{{ stats.availability }}%</span>
+    </div>
+  </div>
   <div class="kpi-card kpi-card--latency">
     <div class="kpi-card__body">
       <span class="kpi-card__label">Avg Latency</span>
@@ -111,8 +117,11 @@ document.querySelector(".ping-btn").addEventListener("click", async function() {
   btn.disabled = true; btn.textContent = "Pinging…";
   const res = await fetch(`/api/ping/${btn.dataset.id}/`);
   const data = await res.json();
+  const sc = data.status_code || 0;
+  const reachable = sc >= 200 && sc < 500;
+  const ok = data.status === "success" || reachable;
   const toast = document.getElementById("pingToast");
-  toast.className = `toast toast--${data.status === "success" ? "success" : "error"}`;
+  toast.className = `toast toast--${ok ? "success" : "error"}`;
   toast.textContent = `[${data.status_code || "ERR"}] ${data.response_time_ms} ms — ${data.status}${data.error ? " — " + data.error : ""}`;
   toast.style.display = "block";
   setTimeout(() => { toast.style.display = "none"; location.reload(); }, 3000);

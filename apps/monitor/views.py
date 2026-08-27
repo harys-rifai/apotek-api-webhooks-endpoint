@@ -74,8 +74,7 @@ def endpoint_list(request):
         total=Count("logs"),
         success=Count("logs", filter=Q(logs__status="success")),
         fail=Count("logs", filter=Q(
-            Q(logs__status="fail", logs__status_code__gte=500)
-            | Q(logs__status="error")
+            Q(logs__status="fail") | Q(logs__status="error")
         )),
     ).order_by("module", "name")
 
@@ -102,19 +101,20 @@ def _stats_for_period_for_endpoint(ep, days=7):
     qs = APIRequestLog.objects.filter(endpoint=ep, created_at__gte=since)
     total = qs.count()
     success = qs.filter(status="success").count()
-    # 4xx (client_error) is "reachable", not a failure — only 5xx/error are.
-    fail = qs.filter(
-        Q(status="fail", status_code__gte=500) | Q(status="error")
-    ).count()
+    fail = qs.filter(status="fail").count()
     error = qs.filter(status="error").count()
     avg_ms = qs.aggregate(a=Avg("response_time_ms"))["a"] or 0
+    # "reachable" = endpoint merespons (termasuk 4xx). Berguna untuk availabilitas,
+    # tapi tidak dipakai sebagai Success Rate agar angka jujur.
     reachable = success + qs.filter(
         status="fail", status_code__gte=400, status_code__lt=500
     ).count()
-    rate = round((reachable / total * 100), 1) if total else 0
+    rate = round((success / total * 100), 1) if total else 0
+    avail = round((reachable / total * 100), 1) if total else 0
     return {
         "total": total, "success": success, "fail": fail,
-        "error": error, "avg_ms": round(avg_ms, 1), "success_rate": rate,
+        "error": error, "avg_ms": round(avg_ms, 1),
+        "success_rate": rate, "availability": avail,
     }
 
 
@@ -218,6 +218,13 @@ def alerts_view(request):
 
 
 # ── API Actions (AJAX) ────────────────────────────────────────────────────────
+
+@login_required
+def api_endpoint_stats(request, pk):
+    """Return recalculated stats for one endpoint (after a manual ping)."""
+    ep = get_object_or_404(APIEndpoint, pk=pk)
+    return JsonResponse({"id": ep.pk, **_stats_for_period_for_endpoint(ep, days=7)})
+
 
 @login_required
 def api_ping(request, pk):
