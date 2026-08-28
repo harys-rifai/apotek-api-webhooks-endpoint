@@ -16,3 +16,6 @@ venv/
 db.sqlite3.prerestore_*
 # snapshot backup otomatis (berisi data, jangan di-commit)
 backups/
+
+# Keep README screenshot
+!img/monitoringSystem.png
