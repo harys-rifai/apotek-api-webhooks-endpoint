@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block content %}
+  <div class="page">
+    <div class="page__head">
+      <div>
+        <h1 class="page__title"><i class="fa-solid fa-sliders"></i> Config &amp; Admin</h1>
+        <p class="page__sub">Kelola data Monitor. Navigasi utama ada di dock bawah; ini untuk manajemen model.</p>
+      </div>
+      <a href="{% url 'dashboard' %}" class="btn btn--ghost"><i class="fa-solid fa-arrow-left"></i> Kembali ke Dashboard</a>
+    </div>
+
+    <div class="admin-grid">
+      {% for app in app_list %}
+        <div class="card admin-app">
+          <div class="admin-app__head">{{ app.name }}</div>
+          <ul class="admin-app__list">
+            {% for model in app.models %}
+              <li>
+                <a href="{{ model.admin_url }}" class="admin-app__link">
+                  <span><i class="fa-solid fa-table"></i> {{ model.name }}</span>
+                  <span class="admin-app__acts">
+                    {% if model.add_url %}<a href="{{ model.add_url }}" class="tag tag--add" title="Tambah"><i class="fa-solid fa-plus"></i></a>{% endif %}
+                    <i class="fa-solid fa-chevron-right"></i>
+                  </span>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+{% endblock %}

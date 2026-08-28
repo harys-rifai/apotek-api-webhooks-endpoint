@@ -135,6 +135,23 @@ window.showToast = function(msg, type = "success") {
     });
   }
 
+  // ── User dropdown (klik untuk buka/tutup, tetap terbuka saat diklik) ──
+  const userWrap = document.getElementById("userMenuWrap");
+  if (userWrap) {
+    userWrap.addEventListener("click", (e) => {
+      e.stopPropagation();
+      userWrap.classList.toggle("open");
+    });
+    // tutup saat klik di luar
+    document.addEventListener("click", (e) => {
+      if (!userWrap.contains(e.target)) userWrap.classList.remove("open");
+    });
+    // tutup setelah memilih item (link)
+    userWrap.querySelectorAll(".navbar__usermenu a").forEach((a) => {
+      a.addEventListener("click", () => userWrap.classList.remove("open"));
+    });
+  }
+
   loadAlerts();
   setInterval(loadAlerts, 15000);
 })();

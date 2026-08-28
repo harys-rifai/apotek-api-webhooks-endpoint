@@ -1,0 +1,188 @@
+/* ── Unified Django Admin theme (menyatu dengan tema app) ── */
+
+/* paksa latar gelap tema app di atas base.css bawaan admin (yang terang) */
+html, body {
+  background: var(--bg-page, #0e0e1a) !important;
+  color: var(--text-primary, #e8e8f0) !important;
+}
+#container { background: transparent !important; }
+#content, .module, .main, .content { background: transparent !important; }
+
+/* sembunyikan header & user-tools default Django (pakai navbar app) */
+#header { display: none !important; }
+.app-layout--admin #user-tools { display: none !important; }
+
+/* sembunyikan nav-sidebar bawaan admin (navigasi model sudah ada di dock app) */
+#nav-sidebar { display: none !important; }
+.app-layout--admin #main { display: block !important; }
+
+/* layout: navbar di atas, konten lebar penuh, dock di bawah */
+.app-layout--admin { min-height: 100vh; }
+.app-layout--admin .main-content--admin { padding: 22px 28px 120px; width: 100%; box-sizing: border-box; }
+.app-layout--admin .page-content--admin { width: 100%; }
+.app-layout--admin #content { padding: 0; }
+
+/* breadcrumbs */
+.app-layout--admin .breadcrumbs {
+  background: transparent; color: var(--text-muted, #94a3b8);
+  padding: 0 0 14px; border: none; font-size: .82rem;
+}
+.app-layout--admin .breadcrumbs a { color: var(--neon-cyan, #00f0ff); }
+.app-layout--admin .breadcrumbs a:hover { color: #fff; }
+
+/* judul */
+.app-layout--admin #content h1 { font-size: 1.3rem; font-weight: 700; margin: 0 0 14px; color: var(--text-primary); }
+.app-layout--admin #content h2 { color: var(--text-primary); }
+.app-layout--admin .module caption,
+.app-layout--admin .module h2 {
+  background: transparent; border-bottom: 1px solid var(--color-border, rgba(255,255,255,.08));
+  color: var(--text-primary); padding: 12px 16px; font-size: .92rem; margin: 0;
+}
+
+/* card/module */
+.app-layout--admin .module {
+  border: 1px solid var(--color-border, rgba(255,255,255,.08));
+  border-radius: 14px; background: var(--bg-card, #1a1a2e);
+  overflow: hidden; margin-bottom: 18px;
+}
+.app-layout--admin .module > caption,
+.app-layout--admin .module > h2 { color: var(--text-primary); }
+
+/* tabel (changelist & umum) */
+.app-layout--admin table {
+  background: transparent; color: var(--text-primary); width: 100%; border-collapse: collapse;
+}
+.app-layout--admin td, .app-layout--admin th {
+  border-bottom: 1px solid var(--color-border, rgba(255,255,255,.06));
+  padding: 10px 14px; color: var(--text-primary);
+}
+.app-layout--admin thead th,
+.app-layout--admin tfoot th {
+  color: var(--text-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
+  border-bottom: 1px solid var(--color-border);
+}
+.app-layout--admin tbody tr.row1, .app-layout--admin tbody tr.row2 { background: transparent; }
+.app-layout--admin tbody tr:nth-child(odd) { background: rgba(255,255,255,.02); }
+.app-layout--admin tbody tr:hover { background: var(--neon-cyan-dim, rgba(0,240,255,.08)) !important; }
+/* centang di changelist */
+.app-layout--admin table input[type="checkbox"],
+.app-layout--admin input[type="radio"] { accent-color: var(--neon-cyan, #00f0ff); }
+
+/* link */
+.app-layout--admin a:link, .app-layout--admin a:visited { color: var(--neon-cyan, #00f0ff); }
+.app-layout--admin a:hover { color: #fff; }
+.app-layout--admin .addlink, .app-layout--admin .changelist-filter a { color: var(--neon-cyan); }
+.app-layout--admin .changelist-filter { background: var(--bg-card); border-color: var(--color-border); }
+.app-layout--admin .changelist-filter li.selected a { color: #fff; font-weight: 700; }
+
+/* object-tools (tombol tambah di kanan atas) */
+.app-layout--admin .object-tools { list-style: none; padding: 0; margin: 0 0 14px; text-align: right; }
+.app-layout--admin .object-tools a, .app-layout--admin .object-tools a:hover,
+.app-layout--admin .addlink {
+  background: linear-gradient(135deg, var(--neon-cyan, #00f0ff), #0088cc);
+  color: #fff !important; border-radius: 8px; padding: 7px 12px; font-weight: 600; display: inline-block;
+}
+
+/* tombol & aksi */
+.app-layout--admin .button, .app-layout--admin input[type=submit],
+.app-layout--admin .submit-row input, .app-layout--admin button,
+.app-layout--admin .default, .app-layout--admin .deletelink {
+  background: linear-gradient(135deg, var(--neon-cyan, #00f0ff), #0088cc);
+  color: #fff !important; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 600;
+}
+.app-layout--admin .button.default, .app-layout--admin .submit-row input.default,
+.app-layout--admin .default { background: linear-gradient(135deg, var(--neon-purple, #8b5cf6), #6d28d9); }
+.app-layout--admin .deletelink { background: #ff4d6d !important; }
+.app-layout--admin .submit-row { background: transparent; border: none; padding: 16px 0 0; text-align: left; }
+
+/* form input */
+.app-layout--admin input[type=text], .app-layout--admin input[type=password],
+.app-layout--admin input[type=email], .app-layout--admin input[type=number],
+.app-layout--admin input[type=url], .app-layout--admin input[type=date],
+.app-layout--admin textarea, .app-layout--admin select,
+.app-layout--admin .vTextField, .app-layout--admin .vLargeTextField, .app-layout--admin .vURLField {
+  background: var(--bg-input, #11111f); color: var(--text-primary);
+  border: 1px solid var(--color-border, rgba(255,255,255,.1)); border-radius: 8px; padding: 8px 10px;
+  width: 100%; max-width: 480px; box-sizing: border-box;
+}
+.app-layout--admin textarea { max-width: 720px; }
+.app-layout--admin label { color: var(--text-primary); font-weight: 600; }
+.app-layout--admin .help, .app-layout--admin .help-text { color: var(--text-muted); font-size: .76rem; }
+.app-layout--admin fieldset { border: 1px solid var(--color-border); border-radius: 12px; background: var(--bg-card); padding: 16px 18px; margin-bottom: 18px; }
+.app-layout--admin fieldset h2 { background: transparent; color: var(--text-primary); border: none; padding: 0 0 10px; }
+
+/* paginator */
+.app-layout--admin .paginator { color: var(--text-muted); padding: 12px 0; }
+.app-layout--admin .paginator a { color: var(--neon-cyan); }
+
+/* pesan */
+.app-layout--admin ul.messagelist li { background: var(--bg-card); color: var(--text-primary); border-radius: 8px; border: none; }
+.app-layout--admin ul.messagelist li.success { border-left: 3px solid #36ff9e; }
+.app-layout--admin ul.messagelist li.error { border-left: 3px solid #ff4d6d; }
+
+/* app-index (daftar aplikasi di halaman utama admin) */
+.app-layout--admin .app-index .module h2 a { color: var(--text-primary); }
+.app-layout--admin .app-index .module caption a { color: var(--text-primary); }
+
+/* ── Admin index grid (seperti dashboard app) ── */
+.app-layout--admin .page {
+  max-width: 1100px; margin: 0 auto; width: 100%;
+}
+.app-layout--admin .page__head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 12px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.app-layout--admin .page__title {
+  font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 8px;
+}
+.app-layout--admin .page__sub { font-size: .82rem; color: var(--text-muted); margin-top: 4px; }
+.admin-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.admin-app { padding: 0; overflow: hidden; }
+.admin-app__head {
+  padding: 12px 16px; border-bottom: 1px solid var(--color-border, rgba(255,255,255,.08));
+  font-weight: 700; font-size: .92rem; color: var(--text-primary);
+  background: rgba(255,255,255,.02);
+}
+.admin-app__list { list-style: none; margin: 0; padding: 6px; }
+.admin-app__list li { margin: 0; }
+.admin-app__link {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 10px; border-radius: 8px; color: var(--text-primary) !important;
+  font-size: .86rem; text-decoration: none;
+}
+.admin-app__link:hover { background: var(--neon-cyan-dim, rgba(0,240,255,.1)); }
+.admin-app__link i.fa-table { color: var(--neon-cyan); margin-right: 8px; }
+.admin-app__acts { display: flex; align-items: center; gap: 10px; opacity: .8; }
+.tag--add {
+  background: rgba(54,255,158,.15); color: #36ff9e; width: 24px; height: 24px;
+  border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* ── Changelist / form pages agar serupa card app ── */
+.app-layout--admin #content-main { width: 100%; }
+.app-layout--admin .results {
+  background: var(--bg-card); border: 1px solid var(--color-border, rgba(255,255,255,.08));
+  border-radius: 14px; overflow: hidden; margin-bottom: 18px;
+}
+.app-layout--admin .results table { margin: 0; }
+.app-layout--admin .changelist-filter {
+  background: var(--bg-card); border: 1px solid var(--color-border, rgba(255,255,255,.08));
+  border-radius: 14px; padding: 14px 16px; margin-bottom: 18px; width: 240px;
+}
+.app-layout--admin .changelist-filter h2,
+.app-layout--admin .changelist-filter h3 { color: var(--text-primary); font-size: .85rem; }
+.app-layout--admin .changelist-filter li { padding: 4px 0; }
+.app-layout--admin .changelist-filter li.selected { font-weight: 700; }
+.app-layout--admin .changelist-form > .results { display: inline-block; vertical-align: top; }
+.app-layout--admin .object-tools { margin-bottom: 14px; }
+.app-layout--admin .actionlist { background: var(--bg-card); border-radius: 12px; padding: 10px 14px; }
+.app-layout--admin .historylink, .app-layout--admin .deletelink, .app-layout--admin .viewsitelink {
+  display: inline-block; margin: 4px 6px 4px 0;
+}
+/* search bar */
+.app-layout--admin #toolbar { background: var(--bg-card); border: 1px solid var(--color-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+.app-layout--admin #toolbar input[type="text"] { max-width: 320px; }
+.app-layout--admin #toolbar input[type="submit"] { margin-left: 8px; }

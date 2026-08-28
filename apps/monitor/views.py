@@ -469,7 +469,13 @@ def api_db_vacuum(request):
 def api_db_sqlite_vacuum(request):
     """Jalankan VACUUM pada SQLite Monitor untuk mengembalikan ruang kosong."""
     from django.db import connection
+    from django.core.management import call_command
     path = settings.DATABASES.get("default", {}).get("NAME")
+    # snapshot dulu sebagai jaminan jika VACUUM bermasalah
+    try:
+        call_command("db_backup", rotate=24)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Backup otomatis gagal: {e}"}, status=500)
     try:
         with connection.cursor() as cur:
             cur.execute("VACUUM")

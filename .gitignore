@@ -8,3 +8,11 @@ media/
 .DS_Store
 venv/
 .venv/
+
+# SQLite WAL/SHM (dihasilkan mode WAL)
+*.sqlite3-wal
+*.sqlite3-shm
+# cadangan darurat restore
+db.sqlite3.prerestore_*
+# snapshot backup otomatis (berisi data, jangan di-commit)
+backups/
