@@ -39,9 +39,18 @@
     border:1px solid var(--color-border,#2a2a40);
     border-radius:var(--radius-lg);
     position:relative; overflow:hidden;
-    transition: background var(--transition), border-color var(--transition);
+    transition: background var(--transition);
   }
-  #topoSvg { width:100%; height:720px; display:block; }
+   #topoSvg { width:100%; height:720px; display:block; }
+
+   .card-corner-title {
+     position:absolute; top:.55rem; left:.7rem; z-index:6; display:inline-flex;
+     align-items:center; gap:.4rem; font-size:.78rem; font-weight:700; letter-spacing:.02em;
+     color:var(--feed-title); padding:.25rem .55rem; border-radius:999px;
+     background:rgba(20,20,38,.65); border:1px solid var(--color-border,#2a2a40);
+     backdrop-filter:blur(4px); pointer-events:none;
+   }
+   .card-corner-title i { color:var(--neon-cyan,#36e0ff); }
 
   /* Fullscreen: fill the whole viewport and let the canvas grow with it */
   #topoWrap:fullscreen {
@@ -55,8 +64,8 @@
   }
   #topoWrap:-webkit-full-screen #topoSvg { width:100%; height:100%; flex:1; }
 
-  #topoSvg .grid { stroke: var(--grid-line); stroke-width:1; }
-  #topoSvg .grid-major { stroke: var(--grid-major); stroke-width:1; }
+   #topoSvg .grid { stroke: var(--grid-line); stroke-width:1; transition: stroke var(--transition); }
+   #topoSvg .grid-major { stroke: var(--grid-major); stroke-width:1; transition: stroke var(--transition); }
 
 
   /* nodes */
@@ -226,6 +235,32 @@
   .topo-split #topoWrap, .node-tooltip {
     transition: background var(--transition), color var(--transition),
                 border-color var(--transition);
+  }
+
+  /* ===== NEON WHITE MODE — topology readability fixes ===== */
+  [data-theme="light"] .topo-split #topoWrap {
+    background: #f4f6fb;
+  }
+  /* clean, legible grid on light bg (not a harsh checkerboard) */
+  [data-theme="light"] #topoSvg .grid { stroke: rgba(20,40,80,.08); }
+  [data-theme="light"] #topoSvg .grid-major { stroke: rgba(20,40,80,.14); }
+  /* solid white tiles with a clear border + soft shadow for separation */
+  [data-theme="light"] .node-base {
+    fill: #ffffff;
+    stroke: rgba(0,0,0,.18);
+    filter: drop-shadow(0 3px 8px rgba(20,40,80,.12));
+  }
+  [data-theme="light"] .node-title { fill: #14142b; }
+  [data-theme="light"] .node-tech  { fill: #4a4a63; }
+  [data-theme="light"] .node-metric { fill: #2a2a45; }
+  [data-theme="light"] .card-corner-title {
+    background: rgba(255,255,255,.9);
+    border-color: rgba(0,0,0,.15);
+    color: #14142b;
+  }
+  [data-theme="light"] .card-corner-title i { color: var(--neon-cyan,#0088cc); }
+  [data-theme="light"] .node-tooltip {
+    box-shadow: 0 6px 20px rgba(0,0,0,.18);
   }</style>
 {% endblock %}
 
@@ -251,6 +286,7 @@
 <div class="topo-main">
   <div class="topo-split">
     <div id="topoWrap">
+    <div class="card-corner-title"><i class="fa-solid fa-diagram-project"></i> Topology</div>
     <svg id="topoSvg" viewBox="0 0 1180 720" preserveAspectRatio="xMidYMid meet">
       <defs>
         <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -266,6 +302,7 @@
 
   <!-- LIVE NETWORK FEED -->
   <aside class="net-feed" id="netFeed">
+    <div class="card-corner-title"><i class="fa-solid fa-wave-square"></i> Live Network Feed</div>
     <div class="net-feed__head">
       <span class="net-feed__title"><i class="fa-solid fa-wave-square"></i> Network Stream</span>
       <span class="net-feed__state" id="netState">connecting…</span>
@@ -329,25 +366,6 @@
       </li>
     </ul>
 
-    <div class="net-feed__subhead">
-      <i class="fa-solid fa-envelope-circle-check"></i> Email Monitoring
-      <button type="button" class="db-size__btn" id="emailRefreshBtn" title="Cek ulang SMTP sekarang">
-        <i class="fa-solid fa-rotate"></i>
-      </button>
-      <span class="db-size__countdown" id="emailCountdown"></span>
-    </div>
-    <ul class="db-size__list" id="emailMonitorList">
-      <li class="db-size__row" data-store="email">
-        <span class="db-size__icon"><i class="fa-solid fa-envelope" style="color:#9b8cff"></i></span>
-        <span class="db-size__name">SMTP Server</span>
-        <span class="db-size__val" id="emailStatus">—</span>
-        <span class="db-size__meta" id="emailMeta"></span>
-        <span class="db-size__sub" id="emailSub"></span>
-        <button type="button" class="db-size__vacuum" id="emailSendTestBtn" title="Kirim email uji">
-          <i class="fa-solid fa-paper-plane"></i> TEST EMAIL
-        </button>
-      </li>
-    </ul>
   </aside>
   </div>
 
@@ -378,6 +396,17 @@
     cache: "#ff9f43", storage: "#4dd0e1", runtime: "#9b8cff", proxy: "#36e0ff",
     system: "#f6c945"
   };
+  // Higher-contrast palette for the light theme so edges/nodes stay legible
+  // on a white background (the neon palette washes out on light bg).
+  const COLOR_LIGHT = {
+    healthy: "#00a865", warning: "#c98a00", critical: "#d6204a",
+    idle: "#6b6b85", database: "#7a2fcf", service: "#0072b8",
+    cache: "#d2691e", storage: "#0a8aa0", runtime: "#6344c0", proxy: "#0072b8",
+    system: "#b8860b"
+  };
+  function palette() {
+    return document.documentElement.getAttribute("data-theme") === "light" ? COLOR_LIGHT : COLOR;
+  }
   const nodesLayer = document.getElementById("nodesLayer");
   const edgesLayer = document.getElementById("edgesLayer");
   const tooltip = document.getElementById("tooltip");
@@ -545,19 +574,20 @@
 
   function drawNode(n, index, total) {
     const { x, y } = placeNode(n, index, total);
+    const P = palette();
     const baseColor = ({
-      database: COLOR.database, service: COLOR.service,
-      cache: COLOR.cache, storage: COLOR.storage,
-      runtime: COLOR.runtime, proxy: COLOR.proxy, system: COLOR.system,
-    })[n.kind] || COLOR.service;
-    const statusColor = COLOR[n.status] || baseColor;
+      database: P.database, service: P.service,
+      cache: P.cache, storage: P.storage,
+      runtime: P.runtime, proxy: P.proxy, system: P.system,
+    })[n.kind] || P.service;
+    const statusColor = P[n.status] || baseColor;
     const g = el("g", { class: "node-card", transform: `translate(${x},${y})` });
     g.dataset.id = n.id; g.dataset.kind = n.kind; g.dataset.status = n.status;
 
     const w = 200, h = 70, r = 15;
     // base rounded tile
     const rect = el("rect", { class: "node-base", x: -w/2, y: -h/2, width: w, height: h,
-      rx: r, ry: r, stroke: "rgba(255,255,255,.10)" });
+      rx: r, ry: r });
     // left status accent bar
     const accent = el("rect", { class: "node-accent", x: -w/2, y: -h/2, width: 5, height: h,
       rx: 2, fill: statusColor });
@@ -578,11 +608,11 @@
         color: "#6c9ccc", noHex: true },
       redis:      { svg: "M22.71 13.145c-1.66 2.092-3.452 4.483-7.038 4.483c-3.203 0-4.397-2.825-4.48-5.12c.701 1.484 2.073 2.685 4.214 2.63c4.117-.133 6.94-3.852 6.94-7.239c0-4.05-3.022-6.972-8.268-6.972c-3.752 0-8.4 1.428-11.455 3.685C2.59 6.937 3.885 9.958 4.35 9.626c2.648-1.904 4.748-3.13 6.784-3.744C8.12 9.244.886 17.05 0 18.425c.1 1.261 1.66 4.648 2.424 4.648c.232 0 .431-.133.664-.365a101 101 0 0 0 5.54-6.765c.222 3.104 1.748 6.898 6.014 6.898c3.819 0 7.604-2.756 9.33-8.965c.2-.764-.73-1.361-1.261-.73zm-4.349-5.013c0 1.959-1.926 2.922-3.685 2.922a4.45 4.45 0 0 1-2.235-.568c1.051-1.592 2.092-3.225 3.21-4.973c1.972.334 2.71 1.43 2.71 2.619",
         color: "#ff4438", noHex: true },
-      media:      { cls: "fa-solid fa-hard-drive",       color: "#4dd0e1" },
-      apps_api:   { cls: "fa-solid fa-server",           color: "#36e0ff" },
-      monitor:    { cls: "fa-solid fa-satellite-dish",  color: "#36e0ff" },
+      media:      { cls: "fa-solid fa-hard-drive",       color: "#0a8aa0" },
+      apps_api:   { cls: "fa-solid fa-server",           color: "#0072b8" },
+      monitor:    { cls: "fa-solid fa-satellite-dish",  color: "#0072b8" },
       monitor_db: { svg: "M21.678.521c-1.032-.92-2.28-.55-3.513.544a8.71 8.71 0 0 0-.547.535c-2.109 2.237-4.066 6.38-4.674 9.544.237.48.422 1.093.544 1.561a13.044 13.044 0 0 1 .164.703s-.019-.071-.096-.296l-.05-.146a1.689 1.689 0 0 0-.033-.08c-.138-.32-.518-.995-.686-1.289-.143.423-.27.818-.376 1.176.484.884.778 2.4.778 2.4s-.025-.099-.147-.442c-.107-.303-.644-1.244-.772-1.464-.217.804-.304 1.346-.226 1.478.152.256.296.698.422 1.186.286 1.1.485 2.44.485 2.44l.017.224a22.41 22.41 0 0 0 .056 2.748c.095 1.146.273 2.13.5 2.657l.155-.084c-.334-1.038-.47-2.399-.41-3.967.09-2.398.642-5.29 1.661-8.304 1.723-4.55 4.113-8.201 6.3-9.945-1.993 1.8-4.692 7.63-5.5 9.788-.904 2.416-1.545 4.684-1.931 6.857.666-2.037 2.821-2.912 2.821-2.912s1.057-1.304 2.292-3.166c-.74.169-1.955.458-2.362.629-.6.251-.762.337-.762.337s1.945-1.184 3.613-1.72C21.695 7.9 24.195 2.767 21.678.521m-18.573.543A1.842 1.842 0 0 0 1.27 2.9v16.608a1.84 1.84 0 0 0 1.835 1.834h9.418a22.953 22.953 0 0 1-.052-2.707c-.006-.062-.011-.141-.016-.2a27.01 27.01 0 0 0-.473-2.378c-.121-.47-.275-.898-.369-1.057-.116-.197-.098-.31-.097-.432 0-.12.015-.245.037-.386a9.98 9.98 0 0 1 .234-1.045l.217-.028c-.017-.035-.014-.065-.031-.097l-.041-.381a32.8 32.8 0 0 1 .382-1.194l.2-.019c-.008-.016-.01-.038-.018-.053l-.043-.316c.63-3.28 2.587-7.443 4.8-9.791.066-.069.133-.128.198-.194Z",
-      email:      { cls: "fa-solid fa-envelope",          color: "#9b8cff" },
+      email:      { cls: "fa-solid fa-envelope",          color: "#6344c0" },
         color: "#0f80cc" },
       nginx:      { svg: "M12 0L1.605 6v12L12 24l10.395-6V6L12 0zm6 16.59c0 .705-.646 1.29-1.529 1.29-.631 0-1.351-.255-1.801-.81l-6-7.141v6.66c0 .721-.57 1.29-1.274 1.29H7.32c-.721 0-1.29-.6-1.29-1.29V7.41c0-.705.63-1.29 1.5-1.29.646 0 1.38.255 1.83.81l5.97 7.141V7.41c0-.721.6-1.29 1.29-1.29h.075c.72 0 1.29.6 1.29 1.29v9.18H18z", color: "#7cc34f", noHex: true },
       python:     { cls: "fa-brands fa-python",          color: "#4b8bbe" },
@@ -596,15 +626,15 @@
       audit:"fa-solid fa-magnifying-glass", common:"fa-solid fa-cube",
     };
     let ic = ICON[n.id];
-    if (!ic && n.id.startsWith("svc_")) ic = { cls: MOD_ICON[n.id.slice(4)] || "fa-solid fa-cube", color: "#9b8cff" };
+    if (!ic && n.id.startsWith("svc_")) ic = { cls: MOD_ICON[n.id.slice(4)] || "fa-solid fa-cube", color: P.runtime };
     if (!ic) {
-      if (n.kind === "database") ic = { cls: "fa-solid fa-database", color: "#b06bff" };
-      else if (n.kind === "cache") ic = { cls: "fa-solid fa-cube", color: "#ff5b4d" };
-      else if (n.kind === "storage") ic = { cls: "fa-solid fa-hard-drive", color: "#4dd0e1" };
-      else if (n.kind === "proxy") ic = { cls: "fa-solid fa-server", color: "#36e0ff" };
-      else if (n.kind === "runtime") ic = { cls: "fa-solid fa-microchip", color: "#9b8cff" };
-      else if (n.kind === "system") ic = { cls: "fa-solid fa-server", color: "#f6c945" };
-      else ic = { cls: "fa-solid fa-cube", color: "#36e0ff" };
+      if (n.kind === "database") ic = { cls: "fa-solid fa-database", color: P.database };
+      else if (n.kind === "cache") ic = { cls: "fa-solid fa-cube", color: P.cache };
+      else if (n.kind === "storage") ic = { cls: "fa-solid fa-hard-drive", color: P.storage };
+      else if (n.kind === "proxy") ic = { cls: "fa-solid fa-server", color: P.proxy };
+      else if (n.kind === "runtime") ic = { cls: "fa-solid fa-microchip", color: P.runtime };
+      else if (n.kind === "system") ic = { cls: "fa-solid fa-server", color: P.system };
+      else ic = { cls: "fa-solid fa-cube", color: P.service };
     }
     ic.noHex = true;   // draw every icon without the hexagon badge
     const ICON_SIZE = 30;   // uniform icon size for all nodes
@@ -734,7 +764,7 @@
     const key = e.from + "->" + e.to;
     const a = nodeState[e.from], b = nodeState[e.to];
     if (!a || !b) return;
-    const color = COLOR[e.status] || COLOR.service;
+    const color = palette()[e.status] || palette().service;
     const down = (e.status === "critical");
 
     // reuse existing edge so particle progress (t) keeps flowing across polls
@@ -829,21 +859,18 @@
     const overallEl = document.getElementById("overall");
     if (totalReq === 0) {
       overallEl.textContent = "Idle";
-      overallEl.style.color = COLOR.idle;
+      overallEl.style.color = palette().idle;
     } else {
       overallEl.textContent = data.overall_success_rate + "%";
       const ovStatus = data.overall_status || (data.overall_success_rate >= 95 ? "healthy"
         : data.overall_success_rate >= 80 ? "warning" : "critical");
       overallEl.style.color =
-        ovStatus === "critical" ? COLOR.critical :
-        ovStatus === "warning" ? COLOR.warning : COLOR.healthy;
+        ovStatus === "critical" ? palette().critical :
+        ovStatus === "warning" ? palette().warning : palette().healthy;
     }
     document.getElementById("req5m").textContent = totalReq;
     document.getElementById("nodeCount").textContent = data.nodes.length;
     document.getElementById("lastUpdate").textContent = "updated " + new Date().toLocaleTimeString();
-
-    // Keep the Email Monitoring side panel in sync with the topology 'email' node
-    if (data.infra && data.infra.email) updateEmailPanel(data.infra.email);
   }
 
   window.addEventListener("pointerup", () => { dragId = null; panning = false; svg.style.cursor = "grab"; });
@@ -951,6 +978,12 @@
   tick();
   setInterval(tick, 10000);
 
+  // Re-render after a theme switch so any stale SVG paint artifact
+  // (e.g. a flickering line at the right edge) is cleared without a refresh.
+  document.addEventListener("theme:changed", () => {
+    if (lastTopo) render(lastTopo);
+  });
+
   // ── Live network stream (SSE) ──────────────────────────────────
   // Each "packet" event animates a one-shot travelling packet along the
   // matching edge(s) and appends a row to the live feed panel.
@@ -964,9 +997,10 @@
   let streamBroken = false;
 
   function edgeColorForPacket(p) {
-    if (p.type === "webhook") return COLOR.warning;
-    if (p.status === "fail" || p.status === "error") return COLOR.critical;
-    return COLOR.healthy;
+    const P = palette();
+    if (p.type === "webhook") return P.warning;
+    if (p.status === "fail" || p.status === "error") return P.critical;
+    return P.healthy;
   }
 
   function spawnPacket(edgeKey, color) {
@@ -1066,89 +1100,6 @@
   refreshDbSizes();
   setInterval(refreshDbSizes, DB_REFRESH_MS);
   setInterval(renderDbCountdown, 1000);
-
-  // ── Email Monitoring panel (mirrors the topology 'email' node) ──
-  const EMAIL_REFRESH_MS = 10000;   // sejalan dengan polling topologi
-  let _emailNext = Date.now() + EMAIL_REFRESH_MS;
-  const emailRow = document.querySelector('.db-size__row[data-store="email"]');
-  const emailStatusEl = document.getElementById("emailStatus");
-  const emailMetaEl = document.getElementById("emailMeta");
-  const emailSubEl = document.getElementById("emailSub");
-  const emailRefreshBtn = document.getElementById("emailRefreshBtn");
-  const emailCountdownEl = document.getElementById("emailCountdown");
-  const emailSendTestBtn = document.getElementById("emailSendTestBtn");
-
-  function renderEmailCountdown() {
-    if (!emailCountdownEl) return;
-    const secs = Math.max(0, Math.round((_emailNext - Date.now()) / 1000));
-    const m = Math.floor(secs / 60), s = secs % 60;
-    emailCountdownEl.textContent = m + ":" + String(s).padStart(2, "0");
-  }
-  setInterval(renderEmailCountdown, 1000);
-
-  function updateEmailPanel(data) {
-    const row = document.querySelector('.db-size__row[data-store="email"]');
-    const stEl = document.getElementById("emailStatus");
-    const metaEl = document.getElementById("emailMeta");
-    const subEl = document.getElementById("emailSub");
-    if (!row || !data) return;
-    const labelMap = { healthy: "Healthy", warning: "Warning", critical: "Critical", idle: "Idle" };
-    const st = data.status || "unknown";
-    row.setAttribute("data-status", st);
-    if (stEl) stEl.textContent = labelMap[st] || st;
-    const bits = [];
-    if (data.host) bits.push(data.host + (data.port ? ":" + data.port : ""));
-    if (data.detail) bits.push(data.detail);
-    if (metaEl) metaEl.textContent = bits.join(" · ");
-    if (subEl) subEl.textContent = st === "healthy"
-      ? "SMTP terhubung · notifikasi email aktif"
-      : (st === "warning" ? "Periksa konfigurasi SMTP / koneksi" : "Tidak ada data");
-  }
-
-  async function refreshEmail() {
-    if (emailRefreshBtn) { emailRefreshBtn.disabled = true; emailRefreshBtn.classList.add("spin"); }
-    try {
-      const r = await fetch("{% url 'api_email_monitor' %}", { headers: { "X-Requested-With": "XMLHttpRequest" } });
-      if (r.ok) {
-        const d = await r.json();
-        updateEmailPanel({ status: d.status, host: d.host, port: d.port, detail: d.detail });
-      }
-    } catch (e) { /* abaikan */ }
-    finally {
-      _emailNext = Date.now() + EMAIL_REFRESH_MS;
-      if (emailRefreshBtn) { emailRefreshBtn.disabled = false; emailRefreshBtn.classList.remove("spin"); }
-      renderEmailCountdown();
-    }
-  }
-  if (emailRefreshBtn) emailRefreshBtn.addEventListener("click", refreshEmail);
-
-  if (emailSendTestBtn) {
-    emailSendTestBtn.addEventListener("click", async () => {
-      emailSendTestBtn.disabled = true;
-      emailSendTestBtn.classList.add("spin");
-      emailSubEl.textContent = "Mengirim email uji…";
-      try {
-        const r = await fetch("{% url 'api_email_monitor' %}?test=1", {
-          method: "POST",
-          headers: { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": getCookie("csrftoken") },
-        });
-        const d = await r.json().catch(() => ({}));
-        updateEmailPanel({ status: d.status, host: d.host, port: d.port, detail: d.detail });
-        if (d.ok) {
-          emailSendTestBtn.classList.add("ok");
-          emailSubEl.textContent = d.message || "Email uji terkirim.";
-        } else {
-          emailSubEl.textContent = "Gagal: " + (d.error || "unknown");
-        }
-      } catch (e) {
-        emailSubEl.textContent = "Gagal mengirim email uji.";
-      } finally {
-        emailSendTestBtn.disabled = false;
-        emailSendTestBtn.classList.remove("spin");
-        setTimeout(() => emailSendTestBtn.classList.remove("ok"), 2500);
-      }
-    });
-  }
 
   // ── Database maintenance buttons ─────────────────────────────────
   function wireMaintBtn(btnId, url, okText) {

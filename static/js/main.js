@@ -28,6 +28,15 @@ if (themeToggle) {
     document.documentElement.setAttribute("data-theme", next);
     try { localStorage.setItem("theme", next); } catch (e) {}
     syncIcon();
+    // Force the topology SVG to fully repaint so theme-switching doesn't
+    // leave a stale paint artifact (e.g. a flickering line at the right edge).
+    const topoSvg = document.getElementById("topoSvg");
+    if (topoSvg) {
+      topoSvg.style.display = "none";
+      void topoSvg.getBoundingClientRect(); // force synchronous reflow
+      topoSvg.style.display = "";
+      document.dispatchEvent(new CustomEvent("theme:changed", { detail: { theme: next } }));
+    }
   });
 }
 
