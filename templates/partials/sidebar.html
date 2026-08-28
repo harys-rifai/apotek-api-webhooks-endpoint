@@ -22,12 +22,6 @@
     <span class="dock__tile"><i class="fa-solid fa-truck-medical"></i></span>
   </a>
 
-  <span class="dock__sep"></span>
-
-  <a href="/admin/" class="dock__item {% if active_menu == 'config' %}active{% endif %}" target="_blank" data-tip="Config (Admin)">
-    <span class="dock__tile"><i class="fa-solid fa-sliders"></i></span>
-  </a>
-
   <form method="post" action="{% url 'logout' %}" class="dock__form">
     {% csrf_token %}
     <button type="submit" class="dock__item dock__item--danger" data-tip="Logout">
