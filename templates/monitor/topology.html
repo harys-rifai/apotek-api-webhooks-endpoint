@@ -328,6 +328,26 @@
         </button>
       </li>
     </ul>
+
+    <div class="net-feed__subhead">
+      <i class="fa-solid fa-envelope-circle-check"></i> Email Monitoring
+      <button type="button" class="db-size__btn" id="emailRefreshBtn" title="Cek ulang SMTP sekarang">
+        <i class="fa-solid fa-rotate"></i>
+      </button>
+      <span class="db-size__countdown" id="emailCountdown"></span>
+    </div>
+    <ul class="db-size__list" id="emailMonitorList">
+      <li class="db-size__row" data-store="email">
+        <span class="db-size__icon"><i class="fa-solid fa-envelope" style="color:#9b8cff"></i></span>
+        <span class="db-size__name">SMTP Server</span>
+        <span class="db-size__val" id="emailStatus">—</span>
+        <span class="db-size__meta" id="emailMeta"></span>
+        <span class="db-size__sub" id="emailSub"></span>
+        <button type="button" class="db-size__vacuum" id="emailSendTestBtn" title="Kirim email uji">
+          <i class="fa-solid fa-paper-plane"></i> TEST EMAIL
+        </button>
+      </li>
+    </ul>
   </aside>
   </div>
 
@@ -821,6 +841,9 @@
     document.getElementById("req5m").textContent = totalReq;
     document.getElementById("nodeCount").textContent = data.nodes.length;
     document.getElementById("lastUpdate").textContent = "updated " + new Date().toLocaleTimeString();
+
+    // Keep the Email Monitoring side panel in sync with the topology 'email' node
+    if (data.infra && data.infra.email) updateEmailPanel(data.infra.email);
   }
 
   window.addEventListener("pointerup", () => { dragId = null; panning = false; svg.style.cursor = "grab"; });
@@ -1043,6 +1066,89 @@
   refreshDbSizes();
   setInterval(refreshDbSizes, DB_REFRESH_MS);
   setInterval(renderDbCountdown, 1000);
+
+  // ── Email Monitoring panel (mirrors the topology 'email' node) ──
+  const EMAIL_REFRESH_MS = 10000;   // sejalan dengan polling topologi
+  let _emailNext = Date.now() + EMAIL_REFRESH_MS;
+  const emailRow = document.querySelector('.db-size__row[data-store="email"]');
+  const emailStatusEl = document.getElementById("emailStatus");
+  const emailMetaEl = document.getElementById("emailMeta");
+  const emailSubEl = document.getElementById("emailSub");
+  const emailRefreshBtn = document.getElementById("emailRefreshBtn");
+  const emailCountdownEl = document.getElementById("emailCountdown");
+  const emailSendTestBtn = document.getElementById("emailSendTestBtn");
+
+  function renderEmailCountdown() {
+    if (!emailCountdownEl) return;
+    const secs = Math.max(0, Math.round((_emailNext - Date.now()) / 1000));
+    const m = Math.floor(secs / 60), s = secs % 60;
+    emailCountdownEl.textContent = m + ":" + String(s).padStart(2, "0");
+  }
+  setInterval(renderEmailCountdown, 1000);
+
+  function updateEmailPanel(data) {
+    const row = document.querySelector('.db-size__row[data-store="email"]');
+    const stEl = document.getElementById("emailStatus");
+    const metaEl = document.getElementById("emailMeta");
+    const subEl = document.getElementById("emailSub");
+    if (!row || !data) return;
+    const labelMap = { healthy: "Healthy", warning: "Warning", critical: "Critical", idle: "Idle" };
+    const st = data.status || "unknown";
+    row.setAttribute("data-status", st);
+    if (stEl) stEl.textContent = labelMap[st] || st;
+    const bits = [];
+    if (data.host) bits.push(data.host + (data.port ? ":" + data.port : ""));
+    if (data.detail) bits.push(data.detail);
+    if (metaEl) metaEl.textContent = bits.join(" · ");
+    if (subEl) subEl.textContent = st === "healthy"
+      ? "SMTP terhubung · notifikasi email aktif"
+      : (st === "warning" ? "Periksa konfigurasi SMTP / koneksi" : "Tidak ada data");
+  }
+
+  async function refreshEmail() {
+    if (emailRefreshBtn) { emailRefreshBtn.disabled = true; emailRefreshBtn.classList.add("spin"); }
+    try {
+      const r = await fetch("{% url 'api_email_monitor' %}", { headers: { "X-Requested-With": "XMLHttpRequest" } });
+      if (r.ok) {
+        const d = await r.json();
+        updateEmailPanel({ status: d.status, host: d.host, port: d.port, detail: d.detail });
+      }
+    } catch (e) { /* abaikan */ }
+    finally {
+      _emailNext = Date.now() + EMAIL_REFRESH_MS;
+      if (emailRefreshBtn) { emailRefreshBtn.disabled = false; emailRefreshBtn.classList.remove("spin"); }
+      renderEmailCountdown();
+    }
+  }
+  if (emailRefreshBtn) emailRefreshBtn.addEventListener("click", refreshEmail);
+
+  if (emailSendTestBtn) {
+    emailSendTestBtn.addEventListener("click", async () => {
+      emailSendTestBtn.disabled = true;
+      emailSendTestBtn.classList.add("spin");
+      emailSubEl.textContent = "Mengirim email uji…";
+      try {
+        const r = await fetch("{% url 'api_email_monitor' %}?test=1", {
+          method: "POST",
+          headers: { "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": getCookie("csrftoken") },
+        });
+        const d = await r.json().catch(() => ({}));
+        updateEmailPanel({ status: d.status, host: d.host, port: d.port, detail: d.detail });
+        if (d.ok) {
+          emailSendTestBtn.classList.add("ok");
+          emailSubEl.textContent = d.message || "Email uji terkirim.";
+        } else {
+          emailSubEl.textContent = "Gagal: " + (d.error || "unknown");
+        }
+      } catch (e) {
+        emailSubEl.textContent = "Gagal mengirim email uji.";
+      } finally {
+        emailSendTestBtn.disabled = false;
+        emailSendTestBtn.classList.remove("spin");
+        setTimeout(() => emailSendTestBtn.classList.remove("ok"), 2500);
+      }
+    });
+  }
 
   // ── Database maintenance buttons ─────────────────────────────────
   function wireMaintBtn(btnId, url, okText) {

@@ -251,8 +251,25 @@ def config_view(request):
         "cfg": cc,
         "ai_cfg": AIConfig.get_active(),
         "sqlite_path": str(settings.DATABASES.get("default", {}).get("NAME")),
+        "apotek_email": _apotekapps_email_config(),
     }
     return render(request, "monitor/config.html", context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.is_staff)
+def api_config_apotek_email(request):
+    """Mirror konfigurasi email dari ApotekApps (/api/common/system-status/).
+
+    Read-only: ApotekApps adalah pemilik konfigurasi SMTP-nya.
+    """
+    cfg = _apotekapps_email_config()
+    if not cfg:
+        return JsonResponse({
+            "ok": False, "configured": False,
+            "detail": "SMTP belum dikonfigurasi di ApotekApps.",
+        })
+    return JsonResponse({"ok": True, "configured": True, "email": cfg})
 
 
 @login_required
@@ -1391,11 +1408,62 @@ def _probe_system():
     return worst, detail, meta
 
 
-def _probe_email():
-    """Probe the configured SMTP server for email delivery health."""
+def _apotekapps_email_config():
+    """Baca konfigurasi email dari ApotekApps.
+
+    Sumber utama: /api/common/system-config/ (lengkap: host, port, user,
+    use_tls, use_ssl, from). Fallback: /api/common/system-status/ (hanya host).
+    Kedua endpoint AllowAny — tidak butuh token. Mengembalikan dict
+    {host, port, user, use_tls, use_ssl, from} atau {} bila gagal/tidak ada.
+    """
     from django.conf import settings
-    host = getattr(settings, "EMAIL_HOST", "") or ""
-    port = int(getattr(settings, "EMAIL_PORT", 25) or 25)
+    base = (getattr(settings, "APOTEK_API_BASE_URL", "http://127.0.0.1:8000/api")
+            .rsplit("/api", 1)[0]).rstrip("/")
+
+    def _get(path):
+        try:
+            with urllib_request.urlopen(base + path, timeout=4) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return None
+
+    # 1) system-config: konfigurasi lengkap
+    data = _get("/api/common/system-config/")
+    email = ((data or {}).get("config") or {}).get("email") if data else None
+    if not email:
+        # 2) fallback system-status: hanya host + status
+        data = _get("/api/common/system-status/")
+        email = ((data or {}).get("services") or {}).get("email")
+
+    if not email:
+        return {}
+    host = (email.get("host") or "").strip()
+    if not host or host == "—":
+        return {}
+    try:
+        port = int(email.get("port") or 25)
+    except (TypeError, ValueError):
+        port = 25
+    return {
+        "host": host, "port": port,
+        "user": email.get("user", ""),
+        "use_tls": bool(email.get("use_tls", False)),
+        "use_ssl": bool(email.get("use_ssl", False)),
+        "from": email.get("from", ""),
+    }
+
+
+def _probe_email():
+    """Probe the configured SMTP server for email delivery health.
+
+    Konfigurasi SMTP dibaca dari ApotekApps (sumber kebenaran) lewat
+    /api/common/system-status/. Bila tidak tersedia, fallback ke settings
+    EMAIL_HOST lokal.
+    """
+    from django.conf import settings
+    cfg = _apotekapps_email_config()
+    host = cfg.get("host") or (getattr(settings, "EMAIL_HOST", "") or "")
+    port = int(cfg.get("port") or getattr(settings, "EMAIL_PORT", 25) or 25)
     if not host:
         return "warning", "SMTP belum dikonfigurasi (EMAIL_HOST kosong).", {}
     import socket
@@ -1406,6 +1474,58 @@ def _probe_email():
         # Email is a non-critical notification channel — its outage does not
         # take down the API, so report it as warning, not critical.
         return "warning", f"SMTP unreachable: {e}", {"host": host, "port": port}
+
+
+@login_required
+def api_email_monitor(request):
+    """Probe the SMTP server for the topology 'Email Monitoring' panel.
+
+    GET /api/email/            → current SMTP health
+    POST /api/email/?test=1    → kirim email uji (memakai send_mail Django)
+    """
+    status, detail, meta = _probe_email()
+    if request.method == "POST" and request.GET.get("test"):
+        from django.conf import settings
+        host = getattr(settings, "EMAIL_HOST", "") or ""
+        if not host:
+            return JsonResponse({
+                "ok": False, "tested": False,
+                "status": status, "detail": detail, **meta,
+                "error": "SMTP belum dikonfigurasi (EMAIL_HOST kosong).",
+            }, status=400)
+        recipient = (getattr(settings, "EMAIL_HOST_USER", "") or "").strip()
+        if not recipient:
+            recipient = request.user.email or ""
+        if not recipient:
+            return JsonResponse({
+                "ok": False, "tested": False,
+                "status": status, "detail": detail, **meta,
+                "error": "Tidak ada penerima email (EMAIL_HOST_USER / email user kosong).",
+            }, status=400)
+        try:
+            from django.core.mail import send_mail
+            send_mail(
+                subject="[ApotekMonitor] Test Email Monitoring",
+                message=("Ini adalah email uji dari panel Topologi · Email Monitoring.\n"
+                         "Jika Anda menerima ini, server SMTP terkonfigurasi dengan benar."),
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                recipient_list=[recipient],
+                fail_silently=False,
+            )
+            return JsonResponse({
+                "ok": True, "tested": True, "status": status, "detail": detail,
+                "message": f"Email uji dikirim ke {recipient}.", **meta,
+            })
+        except Exception as e:
+            return JsonResponse({
+                "ok": False, "tested": True,
+                "status": "warning", "detail": detail,
+                "error": f"Gagal mengirim email uji: {e}", **meta,
+            }, status=400)
+
+    return JsonResponse({
+        "ok": True, "status": status, "detail": detail, **meta,
+    })
 
 
 @login_required
@@ -1621,6 +1741,7 @@ def api_topology_json(request):
             "nginx": {"status": nginx_status, "detail": nginx_detail, **nginx_meta},
             "python": {"status": python_status, "detail": python_detail, **python_meta},
             "system": {"status": system_status, "detail": system_detail, **system_meta},
+            "email": {"status": email_status, "detail": email_detail, **email_meta},
         },
         "server_time": now.isoformat(),
     })

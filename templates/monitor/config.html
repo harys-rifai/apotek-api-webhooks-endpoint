@@ -149,6 +149,54 @@
           </div>
         </form>
       </div>
+    <!-- Email (ApotekApps) -->
+    <div class="card card--collapsible">
+      <div class="card__header cfg-toggle" data-target="body-email">
+        <h2 class="card__title"><i class="fa-solid fa-envelope" style="color:var(--neon-cyan)"></i> Email (ApotekApps)</h2>
+        <span class="card__header-right">
+          <span class="status-badge" id="status-email" data-section="email">—</span>
+          <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+        </span>
+      </div>
+      <div class="card__body cfg-body" id="body-email">
+        <p class="hint" style="margin-bottom:.6rem">
+          Konfigurasi SMTP dibaca <b>otomatis</b> dari ApotekApps
+          (<code>/api/common/system-status/</code>). ApotekApps adalah pemilik
+          setting ini — ubah di sana bila perlu.
+        </p>
+        <div class="form-group">
+          <label for="email_host">SMTP Host</label>
+          <input type="text" id="email_host" name="email_host" class="form-control" readonly
+                 value="{{ apotek_email.host|default:'' }}" placeholder="—"/>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="email_port">Port</label>
+            <input type="text" id="email_port" name="email_port" class="form-control" readonly
+                   value="{{ apotek_email.port|default:'' }}" placeholder="—"/>
+          </div>
+          <div class="form-group">
+            <label for="email_user">User</label>
+            <input type="text" id="email_user" name="email_user" class="form-control" readonly
+                   value="{{ apotek_email.user|default:'' }}" placeholder="—"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="email_tls">TLS</label>
+            <input type="text" id="email_tls" name="email_tls" class="form-control" readonly
+                   value="{% if apotek_email.use_tls %}ya{% else %}tidak{% endif %}"/>
+          </div>
+          <div class="form-group">
+            <label for="email_from">From</label>
+            <input type="text" id="email_from" name="email_from" class="form-control" readonly
+                   value="{{ apotek_email.from|default:'' }}" placeholder="—"/>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="emailRefreshBtn"><i class="fa-solid fa-rotate"></i> Muat Ulang</button>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -263,6 +311,33 @@
   ['sqlite', 'postgres', 'redis', 'ai'].forEach(function (s) {
     setStatus(s, 'idle', 'belum dicek');
   });
+
+  // Email (ApotekApps) — auto-load dari /api/common/system-status/
+  function loadApotekEmail() {
+    setStatus('email', 'idle', 'memuat…');
+    fetch('/api/config/apotek-email/', { headers: headers() })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok && d.email) {
+          var e = d.email;
+          var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+          set('email_host', e.host || '');
+          set('email_port', e.port || '');
+          set('email_user', e.user || '');
+          set('email_tls', e.use_tls ? 'ya' : 'tidak');
+          set('email_from', e.from || '');
+          setStatus('email', 'healthy', e.host + ':' + e.port);
+        } else {
+          var els = ['email_host', 'email_port', 'email_user', 'email_tls', 'email_from'];
+          els.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+          setStatus('email', 'warning', 'belum dikonfigurasi');
+        }
+      }).catch(function () {
+        setStatus('email', 'critical', 'gagal membaca ApotekApps');
+      });
+  }
+  var emailRefreshBtn = document.getElementById('emailRefreshBtn');
+  if (emailRefreshBtn) emailRefreshBtn.addEventListener('click', loadApotekEmail);
+  loadApotekEmail();
 })();
 </script>
 {% endblock %}
