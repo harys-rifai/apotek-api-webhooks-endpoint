@@ -26,9 +26,16 @@
       </div>
     </div>
 
-    <div class="navbar__user">
+    <div class="navbar__user" id="userMenuWrap">
       <div class="navbar__avatar">{{ request.user.username|first|upper }}</div>
       <span>{{ request.user.username }}</span>
+      <i class="fa-solid fa-caret-down"></i>
+      <div class="navbar__usermenu" id="userMenu">
+        {% if request.user.is_staff or request.user.is_superuser %}
+          <a href="{% url 'user_list' %}"><i class="fa-solid fa-users"></i> Manajemen User</a>
+        {% endif %}
+        <a href="{% url 'logout' %}"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
+      </div>
     </div>
     <span class="navbar__time" id="clock"></span>
   </div>

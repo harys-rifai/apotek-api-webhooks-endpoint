@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Manajemen User — OrchestrationApps{% endblock %}
+
+{% block content %}
+<section class="page">
+  <div class="page__head">
+    <div>
+      <h1 class="page__title"><i class="fa-solid fa-users"></i> Manajemen User</h1>
+      <p class="page__sub">User Monitor lokal &amp; hasil sinkron dari ApotekApps.</p>
+    </div>
+    <div class="page__actions">
+      <form method="post" action="{% url 'user_sync_apotekapps' %}" style="display:inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn--ghost"><i class="fa-solid fa-rotate"></i> Sync dari ApotekApps</button>
+      </form>
+      <a href="{% url 'user_create' %}" class="btn btn-primary"><i class="fa-solid fa-user-plus"></i> Tambah User</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Email</th>
+          <th>Asal</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th class="ta-right">Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+          <tr>
+            <td><strong>{{ u.username }}</strong>{% if u.pk == request.user.pk %} <span class="tag tag--you">anda</span>{% endif %}</td>
+            <td>{{ u.email|default:"—" }}</td>
+            <td>
+              {% if u.monitor_profile.source == "apotekapps" %}
+                <span class="tag tag--ext">ApotekApps</span>
+              {% else %}
+                <span class="tag tag--local">Lokal</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.is_superuser %}Superuser{% elif u.is_staff %}Staff/Admin{% else %}Viewer{% endif %}
+            </td>
+            <td>
+              {% if u.is_active %}<span class="tag tag--ok">Aktif</span>{% else %}<span class="tag tag--bad">Nonaktif</span>{% endif %}
+            </td>
+            <td class="ta-right">
+              {% if u.pk != request.user.pk and not u.is_superuser %}
+                <form method="post" action="{% url 'user_delete' u.pk %}" style="display:inline"
+                      onsubmit="return confirm('Hapus user {{ u.username }}?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn--danger btn--sm"><i class="fa-solid fa-trash"></i></button>
+                </form>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="muted center">Belum ada user.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

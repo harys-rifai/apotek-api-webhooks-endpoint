@@ -182,6 +182,51 @@
 
 .navbar__time { font-family: var(--font-mono); font-size: .78rem; color: var(--text-muted); }
 
+/* user dropdown menu */
+.navbar__user { position: relative; cursor: pointer; }
+.navbar__usermenu {
+  position: absolute; top: calc(100% + 10px); right: 0; min-width: 180px;
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: 10px; padding: 6px; display: none; z-index: 50;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+.navbar__user:hover .navbar__usermenu,
+.navbar__user:focus-within .navbar__usermenu { display: block; }
+.navbar__usermenu a {
+  display: flex; align-items: center; gap: 8px; padding: 9px 10px;
+  border-radius: 7px; color: var(--text-primary); font-size: .82rem; font-weight: 500;
+}
+.navbar__usermenu a:hover { background: var(--neon-cyan-dim); color: var(--neon-cyan); }
+
+/* tags */
+.tag {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: .68rem; font-weight: 700; letter-spacing: .03em;
+}
+.tag--local { background: rgba(54,224,255,.15); color: var(--neon-cyan); }
+.tag--ext   { background: rgba(155,140,255,.18); color: var(--neon-purple); }
+.tag--ok    { background: rgba(54,255,158,.15); color: #36ff9e; }
+.tag--bad   { background: rgba(255,77,109,.15); color: #ff4d6d; }
+.tag--you   { background: rgba(255,210,63,.18); color: #ffd23f; }
+.muted { color: var(--text-muted); }
+.center { text-align: center; }
+.ta-right { text-align: right; }
+
+/* page layout (user management) */
+.page { padding: 24px; max-width: 1100px; margin: 0 auto; }
+.page__head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 12px; margin-bottom: 18px; flex-wrap: wrap;
+}
+.page__title { font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.page__sub { font-size: .82rem; color: var(--text-muted); margin-top: 4px; }
+.page__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.card--narrow { max-width: 520px; }
+.card .form, .form { display: flex; flex-direction: column; gap: 14px; }
+.checkbox { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--text-secondary); }
+.checkbox input { width: 16px; height: 16px; }
+.hint { font-size: .72rem; color: var(--text-muted); }
+
 /* ── Card header/body helpers (theme.css punya .card tapi tanpa __header) ── */
 .card__header {
   display: flex; align-items: center; justify-content: space-between;

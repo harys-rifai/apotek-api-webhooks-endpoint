@@ -43,6 +43,18 @@
   }
   #topoSvg { width:100%; height:720px; display:block; }
 
+  /* Fullscreen: fill the whole viewport and let the canvas grow with it */
+  #topoWrap:fullscreen {
+    width:100vw; height:100vh; flex:none; border-radius:0; border:none;
+    display:flex; flex-direction:column;
+  }
+  #topoWrap:fullscreen #topoSvg { width:100%; height:100%; flex:1; }
+  #topoWrap:-webkit-full-screen {
+    width:100vw; height:100vh; flex:none; border-radius:0; border:none;
+    display:flex; flex-direction:column;
+  }
+  #topoWrap:-webkit-full-screen #topoSvg { width:100%; height:100%; flex:1; }
+
   #topoSvg .grid { stroke: var(--grid-line); stroke-width:1; }
   #topoSvg .grid-major { stroke: var(--grid-major); stroke-width:1; }
 
@@ -225,6 +237,7 @@
     <span class="stat">Requests (5m): <b id="req5m">0</b></span>
     <span class="stat badge--info" id="pollState">polling…</span>
     <span class="stat">Nodes: <b id="nodeCount">0</b></span>
+    <span class="stat" id="lastUpdate" style="opacity:.7">updated —</span>
     <span class="stat topo-hint">💡 Drag a node to move it · drag the background to pan · scroll to zoom</span>
   </div>
   <span class="topo-actions">
@@ -792,14 +805,22 @@
     redrawEdges();
     fitView();
 
-    document.getElementById("overall").textContent = data.overall_success_rate + "%";
-    const ovStatus = data.overall_status || (data.overall_success_rate >= 95 ? "healthy"
-      : data.overall_success_rate >= 80 ? "warning" : "critical");
-    document.getElementById("overall").style.color =
-      ovStatus === "critical" ? COLOR.critical :
-      ovStatus === "warning" ? COLOR.warning : COLOR.healthy;
-    document.getElementById("req5m").textContent = data.total_requests_5m;
+    const totalReq = data.total_requests_5m || 0;
+    const overallEl = document.getElementById("overall");
+    if (totalReq === 0) {
+      overallEl.textContent = "Idle";
+      overallEl.style.color = COLOR.idle;
+    } else {
+      overallEl.textContent = data.overall_success_rate + "%";
+      const ovStatus = data.overall_status || (data.overall_success_rate >= 95 ? "healthy"
+        : data.overall_success_rate >= 80 ? "warning" : "critical");
+      overallEl.style.color =
+        ovStatus === "critical" ? COLOR.critical :
+        ovStatus === "warning" ? COLOR.warning : COLOR.healthy;
+    }
+    document.getElementById("req5m").textContent = totalReq;
     document.getElementById("nodeCount").textContent = data.nodes.length;
+    document.getElementById("lastUpdate").textContent = "updated " + new Date().toLocaleTimeString();
   }
 
   window.addEventListener("pointerup", () => { dragId = null; panning = false; svg.style.cursor = "grab"; });
@@ -865,7 +886,11 @@
       syncFsIcon();
     } catch (e) { console.warn("fullscreen unavailable:", e); }
   });
-  document.addEventListener("fullscreenchange", syncFsIcon);
+  document.addEventListener("fullscreenchange", () => {
+    syncFsIcon();
+    // re-fit the topology to the new (full-viewport) size after layout settles
+    setTimeout(() => { viewInitialized = false; fitView(); applyView(); }, 60);
+  });
 
   // ── Refresh: refetch + brief spin feedback so the click is visible ──
   document.getElementById("refreshView").addEventListener("click", async () => {

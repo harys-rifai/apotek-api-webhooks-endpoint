@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Tambah User — OrchestrationApps{% endblock %}
+
+{% block content %}
+<section class="page">
+  <div class="page__head">
+    <div>
+      <h1 class="page__title"><i class="fa-solid fa-user-plus"></i> Tambah User</h1>
+      <p class="page__sub">Buat user Monitor lokal (dapat login ke dashboard ini).</p>
+    </div>
+    <a href="{% url 'user_list' %}" class="btn btn--ghost"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
+  </div>
+
+  <div class="card card--narrow">
+    {% if err %}
+      <div class="alert alert--error"><i class="fa-solid fa-circle-exclamation"></i> {{ err }}</div>
+    {% endif %}
+    <form method="post" class="form">
+      {% csrf_token %}
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" class="form-control"
+               value="{{ username|default:'' }}" required autofocus/>
+      </div>
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" class="form-control"
+               value="{{ email|default:'' }}"/>
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" class="form-control" required/>
+        <small class="hint">Minimal 8 karakter.</small>
+      </div>
+      <div class="form-group">
+        <label for="password_confirm">Konfirmasi Password</label>
+        <input type="password" id="password_confirm" name="password_confirm" class="form-control" required/>
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" name="is_staff" {% if is_staff %}checked{% endif %}/>
+        <span>Berikan akses Staff/Admin (bisa kelola user &amp; lihat semua halaman)</span>
+      </label>
+      <button type="submit" class="btn btn-primary btn--full"><i class="fa-solid fa-save"></i> Simpan User</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

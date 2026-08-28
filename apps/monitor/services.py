@@ -207,3 +207,46 @@ def call_api(
         )
 
     return result
+
+
+def get_apotek_users():
+    """Ambil daftar user dari ApotekApps (butuh hak admin).
+
+    Mengembalikan tuple (status_ok: bool, users: list[dict], error: str).
+    Setiap item: {id, username, email, first_name, last_name, is_active,
+    is_staff, ...} — tergantung respons ApotekApps. Aman bila endpoint tidak
+    tersedia (mengembalikan status_ok=False beserta pesan error).
+    """
+    token = _get_token()
+    if not token:
+        return False, [], "Tidak bisa mendapatkan token ApotekApps (cek kredensial)."
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}",
+    }
+    # coba beberapa kemungkinan path endpoint user di ApotekApps
+    candidates = ["/users/", "/accounts/users/"]
+    last_err = ""
+    for path in candidates:
+        try:
+            resp = requests.get(f"{BASE_URL}{path}", headers=headers, timeout=15)
+        except Exception as e:
+            last_err = f"Request gagal: {e}"
+            continue
+        if resp.status_code == 200:
+            try:
+                payload = resp.json()
+            except Exception:
+                last_err = "Respons bukan JSON."
+                continue
+            users = payload.get("results", payload) if isinstance(payload, dict) else payload
+            if isinstance(users, list):
+                return True, users, ""
+            last_err = "Format respons tidak dikenali."
+        elif resp.status_code in (401, 403):
+            last_err = f"Akses ditolak ({resp.status_code}). User ApotekApps bukan admin."
+        else:
+            last_err = f"HTTP {resp.status_code}: {resp.text[:160]}"
+    return False, [], last_err or "Endpoint user ApotekApps tidak ditemukan."
+
