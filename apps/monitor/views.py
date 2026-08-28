@@ -1481,37 +1481,45 @@ def api_email_monitor(request):
     """Probe the SMTP server for the topology 'Email Monitoring' panel.
 
     GET /api/email/            → current SMTP health
-    POST /api/email/?test=1    → kirim email uji (memakai send_mail Django)
+    POST /api/email/?test=1    → kirim email uji lewat SMTP ApotekApps
     """
     status, detail, meta = _probe_email()
     if request.method == "POST" and request.GET.get("test"):
-        from django.conf import settings
-        host = getattr(settings, "EMAIL_HOST", "") or ""
+        cfg = _apotekapps_email_config()
+        host = cfg.get("host") or meta.get("host") or ""
         if not host:
             return JsonResponse({
                 "ok": False, "tested": False,
                 "status": status, "detail": detail, **meta,
-                "error": "SMTP belum dikonfigurasi (EMAIL_HOST kosong).",
+                "error": "SMTP belum dikonfigurasi di ApotekApps (EMAIL_HOST kosong).",
             }, status=400)
-        recipient = (getattr(settings, "EMAIL_HOST_USER", "") or "").strip()
-        if not recipient:
-            recipient = request.user.email or ""
+        recipient = (cfg.get("user") or request.user.email or "").strip()
         if not recipient:
             return JsonResponse({
                 "ok": False, "tested": False,
                 "status": status, "detail": detail, **meta,
-                "error": "Tidak ada penerima email (EMAIL_HOST_USER / email user kosong).",
+                "error": "Tidak ada penerima email (user SMTP / email user kosong).",
             }, status=400)
         try:
-            from django.core.mail import send_mail
-            send_mail(
-                subject="[ApotekMonitor] Test Email Monitoring",
-                message=("Ini adalah email uji dari panel Topologi · Email Monitoring.\n"
-                         "Jika Anda menerima ini, server SMTP terkonfigurasi dengan benar."),
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                recipient_list=[recipient],
-                fail_silently=False,
+            from django.core.mail import EmailMessage, get_connection
+            conn = get_connection(
+                host=cfg.get("host"),
+                port=int(cfg.get("port") or 25),
+                username=cfg.get("user") or None,
+                password=None,  # password tidak dikirimkan oleh ApotekApps
+                use_tls=bool(cfg.get("use_tls")),
+                use_ssl=bool(cfg.get("use_ssl")),
+                timeout=15,
             )
+            msg = EmailMessage(
+                subject="[ApotekMonitor] Test Email Monitoring",
+                body=("Ini adalah email uji dari panel Topologi · Email Monitoring.\n"
+                      "Jika Anda menerima ini, server SMTP (milik ApotekApps) terkonfigurasi dengan benar."),
+                from_email=cfg.get("from") or cfg.get("user"),
+                to=[recipient],
+                connection=conn,
+            )
+            msg.send(fail_silently=False)
             return JsonResponse({
                 "ok": True, "tested": True, "status": status, "detail": detail,
                 "message": f"Email uji dikirim ke {recipient}.", **meta,
