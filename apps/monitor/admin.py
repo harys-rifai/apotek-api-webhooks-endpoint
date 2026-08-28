@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight, NodeLayout
+from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
+                     AiInsight, NodeLayout, AIConfig, AIChatLog)
 
 
 @admin.register(NodeLayout)
@@ -49,3 +50,16 @@ class AlertAdmin(admin.ModelAdmin):
     def mark_read(self, request, queryset):
         queryset.update(is_read=True)
     mark_read.short_description = "Tandai sudah dibaca"
+
+
+@admin.register(AIConfig)
+class AIConfigAdmin(admin.ModelAdmin):
+    list_display = ["enabled", "model", "base_url", "updated_at"]
+
+
+@admin.register(AIChatLog)
+class AIChatLogAdmin(admin.ModelAdmin):
+    list_display = ["created_at", "chat_type", "role", "user", "model", "session_id"]
+    list_filter = ["chat_type", "role"]
+    search_fields = ["content", "session_id"]
+    readonly_fields = ["created_at"]

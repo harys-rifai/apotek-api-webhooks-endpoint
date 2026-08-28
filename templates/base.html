@@ -34,6 +34,120 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- ===================== AI Chatbot Widget ===================== -->
+  <div id="chatWidget" class="chat-hidden">
+    <div class="chat-header">
+      <div class="chat-avatar"><i class="fa-solid fa-robot"></i></div>
+      <div>
+        <div class="chat-title">Asisten AI Monitor</div>
+        <div class="chat-sub" id="chatStatus">Siap membantu</div>
+      </div>
+      <button class="chat-close" onclick="toggleChat()" title="Tutup"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="chat-body" id="chatBody">
+      <div class="chat-msg bot">Halo! Saya asisten AI untuk OrchestrationApps (monitoring ApotekApps). Tanya seputar cara pakai dashboard, memahami metric, atau troubleshooting insiden.</div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="chatInput" placeholder="Tulis pertanyaan..." onkeyup="if(event.key==='Enter')sendChat()" autocomplete="off"/>
+      <button class="btn btn-primary" onclick="sendChat()"><i class="fa-solid fa-paper-plane"></i></button>
+    </div>
+  </div>
+  <button class="chat-fab" id="chatFab" onclick="toggleChat()" title="Asisten AI">
+    <i class="fa-solid fa-robot"></i>
+  </button>
+  <script>
+  function toggleChat() {
+    var w = document.getElementById('chatWidget');
+    var hidden = w.classList.toggle('chat-hidden');
+    if (!hidden && !window.__chatLoaded) { loadChatHistory(); window.__chatLoaded = true; }
+  }
+  function getChatSessionId() {
+    var sid = localStorage.getItem('monitor_ai_chat_session');
+    if (!sid) {
+      sid = 'web-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem('monitor_ai_chat_session', sid);
+    }
+    return sid;
+  }
+  function getCookie(name) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function chatHeaders() {
+    return {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken')
+    };
+  }
+  var chatHistory = [];
+  function appendChat(role, text, thinking) {
+    var body = document.getElementById('chatBody');
+    var div = document.createElement('div');
+    div.className = 'chat-msg ' + (role === 'user' ? 'user' : 'bot') + (thinking ? ' thinking' : '');
+    div.textContent = text;
+    body.appendChild(div);
+    body.scrollTop = body.scrollHeight;
+    return div;
+  }
+  async function loadChatHistory() {
+    try {
+      var sid = getChatSessionId();
+      var res = await fetch('/api/ai-chat/history/?session_id=' + encodeURIComponent(sid), { headers: chatHeaders() });
+      if (!res.ok) return;
+      var data = await res.json();
+      var items = data.items || [];
+      chatHistory = [];
+      items.forEach(function (it) {
+        if (it.role === 'user' || it.role === 'assistant') {
+          appendChat(it.role, it.content);
+          chatHistory.push({ role: it.role, content: it.content });
+        }
+      });
+      if (items.length) {
+        var note = document.createElement('div');
+        note.className = 'chat-msg bot thinking';
+        note.textContent = '— akhir riwayat sesi sebelumnya —';
+        document.getElementById('chatBody').appendChild(note);
+      }
+    } catch (e) { /* riwayat opsional */ }
+  }
+  async function sendChat() {
+    var input = document.getElementById('chatInput');
+    var msg = (input.value || '').trim();
+    if (!msg) return;
+    input.value = '';
+    appendChat('user', msg);
+    chatHistory.push({ role: 'user', content: msg });
+    var thinking = appendChat('bot', 'Mengetik...', true);
+    document.getElementById('chatStatus').textContent = 'Menjawab...';
+    try {
+      var res = await fetch('/api/ai-chat/', {
+        method: 'POST', headers: chatHeaders(),
+        body: JSON.stringify({
+          message: msg,
+          history: chatHistory.slice(0, -1),
+          session_id: getChatSessionId(),
+          source: 'chatbot_widget'
+        })
+      });
+      var data = await res.json();
+      thinking.remove();
+      if (res.ok && data.reply) {
+        appendChat('bot', data.reply);
+        chatHistory.push({ role: 'assistant', content: data.reply });
+      } else {
+        appendChat('bot', '⚠️ ' + (data.error || 'AI belum dikonfigurasi. Buka System Status untuk mengatur AI.'));
+      }
+    } catch (e) {
+      thinking.remove();
+      appendChat('bot', '⚠️ Gagal menghubungi server AI.');
+    } finally {
+      document.getElementById('chatStatus').textContent = 'Siap membantu';
+    }
+  }
+  </script>
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="{% static 'js/main.js' %}?v=20260827e"></script>
   {% block extra_js %}{% endblock %}
