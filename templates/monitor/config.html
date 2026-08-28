@@ -129,17 +129,19 @@
             <input type="text" id="ai_base_url" name="ai_base_url" class="form-control"
                    value="{{ cfg.ai_base_url }}" placeholder="http://localhost:20128/v1"/>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="ai_model">Model</label>
+          <div class="form-group">
+            <label for="ai_model">Model</label>
+            <div class="input-with-btn">
               <input type="text" id="ai_model" name="ai_model" class="form-control"
                      value="{{ cfg.ai_model }}" placeholder="gpt-4o"/>
+              <button type="button" class="btn btn-outline btn-sm" id="aiAutodiscover"><i class="fa-solid fa-wand-magic-sparkles"></i> Cari Model Free</button>
             </div>
-            <div class="form-group">
-              <label for="ai_api_key">API Key</label>
-              <input type="password" id="ai_api_key" name="ai_api_key" class="form-control"
-                     placeholder="{{ cfg.mask_ai_key|default:'biarkan kosong jika tidak berubah' }}"/>
-            </div>
+            <small class="hint" id="aiDiscoverHint">Otomatis cari model free/ringan dari router (mis. my-free-tiers).</small>
+          </div>
+          <div class="form-group">
+            <label for="ai_api_key">API Key</label>
+            <input type="password" id="ai_api_key" name="ai_api_key" class="form-control"
+                   placeholder="{{ cfg.mask_ai_key|default:'biarkan kosong jika tidak berubah' }}"/>
           </div>
           <div class="form-actions">
             <button type="button" class="btn btn-outline btn-sm test-btn" data-section="ai"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
@@ -213,6 +215,37 @@
         }).catch(function () { setStatus(section, 'critical', 'gagal'); });
     });
   });
+
+  // Auto-discover free model dari router AI
+  var discoverBtn = document.getElementById('aiAutodiscover');
+  var discoverHint = document.getElementById('aiDiscoverHint');
+  if (discoverBtn) {
+    discoverBtn.addEventListener('click', function () {
+      discoverBtn.disabled = true;
+      discoverBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mencari…';
+      if (discoverHint) discoverHint.textContent = 'Memuat daftar model dari router…';
+      fetch('/api/config/ai-autodiscover/', { method: 'POST', headers: headers() })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) {
+            var inp = document.getElementById('ai_model');
+            if (inp) inp.value = d.model;
+            var msg = 'Model free ditemukan & disimpan: ' + d.model + ' (' + d.total + ' model)';
+            if (d.verified === false) msg += ' — belum terverifikasi (limit/balance router?)';
+            showAlert(msg, d.verified === false ? 'warn' : 'success');
+            if (discoverHint) discoverHint.textContent = 'Terpilih: ' + d.model + (d.verified ? ' ✓' : ' (belum terverifikasi)');
+          } else {
+            showAlert(d.error || 'Gagal mencari model.', 'error');
+            if (discoverHint) discoverHint.textContent = d.error || 'Gagal.';
+          }
+        }).catch(function () {
+          showAlert('Gagal menghubungi server.', 'error');
+          if (discoverHint) discoverHint.textContent = 'Gagal menghubungi server.';
+        }).finally(function () {
+          discoverBtn.disabled = false;
+          discoverBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Cari Model Free';
+        });
+    });
+  }
 
   // Collapsible cards: sembunyikan body, tampilkan saat header di-klik
   document.querySelectorAll('.cfg-toggle').forEach(function (hdr) {

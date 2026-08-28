@@ -1,6 +1,9 @@
 import json
 from datetime import timedelta
 
+import urllib.error as urllib_error
+import urllib.request as urllib_request
+
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Count, Avg, Q
 from django.http import JsonResponse
@@ -344,7 +347,7 @@ def api_config_test(request):
         except Exception as e:
             result.update(status="critical", detail=str(e))
     elif section == "ai":
-        ai = AIConfig.get_active()
+        ai = _effective_ai_config()
         if not ai.enabled or not ai.api_key or not ai.base_url:
             result.update(status="warning", detail="AI belum diaktifkan/terisi lengkap")
         else:
@@ -358,6 +361,80 @@ def api_config_test(request):
         return JsonResponse({"error": "Section tidak dikenal."}, status=400)
 
     return JsonResponse(result)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.is_staff)
+@require_POST
+def api_config_ai_autodiscover(request):
+    """Cari model free otomatis dari router AI (9router) dan simpan ke config.
+
+    Mengambil daftar model via /v1/models, memilih model free/ringan, lalu
+    menyimpannya ke ConnectionConfig & AIConfig.
+    """
+    cc = ConnectionConfig.get_active()
+    ai = AIConfig.get_active()
+    base_url = cc.ai_base_url or ai.base_url
+    api_key = cc.ai_api_key or ai.api_key
+    if not base_url or not api_key:
+        return JsonResponse(
+            {"ok": False, "error": "Isi & simpan Base URL dan API Key AI dulu."},
+            status=400,
+        )
+
+    try:
+        models = fetch_router_models(base_url, api_key)
+    except RuntimeError as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=502)
+
+    if not models:
+        return JsonResponse(
+            {"ok": False, "error": "Tidak ada model di router."}, status=404)
+
+    # Susun kandidat free/ringan, lalu verifikasi dengan ping sungguhan agar
+    # terpilih model yang BENAR-BENAR bisa dipakai (bukan cuma by name).
+    candidates = rank_free_models(models)
+    chosen = None
+    tried = []
+    base_cfg = type("C", (), {})()
+    base_cfg.base_url = base_url
+    base_cfg.api_key = api_key
+    base_cfg.enabled = True
+    for cand in candidates:
+        base_cfg.model = cand
+        tried.append(cand)
+        try:
+            call_ai_chat([{"role": "user", "content": "ping"}],
+                         config=base_cfg, temperature=0)
+            chosen = cand
+            break
+        except Exception:
+            continue
+
+    # fallback: bila semua kandidat gagal (mis. router limit), pakai pilihan by name
+    if not chosen:
+        chosen = pick_free_model(models)
+        detail = (f"Model free by-name: {chosen}. "
+                  f"Peringatan: {len(tried)} kandidat diuji tapi gagal merespons "
+                  f"(bisa jadi limit/balance router).")
+    else:
+        detail = f"Model free berfungsi dipilih: {chosen}"
+
+    # simpan ke kedua config agar konsisten
+    cc.ai_model = chosen
+    cc.save()
+    ai.model = chosen
+    ai.save()
+
+    return JsonResponse({
+        "ok": True,
+        "model": chosen,
+        "verified": chosen in tried,
+        "total": len(models),
+        "tried": tried[:12],
+        "models": models,
+        "detail": detail,
+    })
 
 
 # ── API Actions (AJAX) ────────────────────────────────────────────────────────
@@ -669,6 +746,103 @@ def _conn_cfg():
         return ConnectionConfig.get_active()
     except Exception:
         return None
+
+
+def _effective_ai_config():
+    """Gabungkan AIConfig dengan override dari ConnectionConfig.
+
+    ConnectionConfig adalah sumber kebenaran utama (diisi dari menu Config);
+    AIConfig disinkronkan saat menyimpan section AI, tapi bila ada nilai
+    ConnectionConfig yang lebih baru, gunakan itu agar chatbot konsisten.
+    """
+    ai = AIConfig.get_active()
+    cc = _conn_cfg()
+    if not cc:
+        return ai
+    if cc.ai_base_url:
+        ai.base_url = cc.ai_base_url
+    if cc.ai_model:
+        ai.model = cc.ai_model
+    if cc.ai_api_key:
+        ai.api_key = cc.ai_api_key
+    if cc.ai_enabled:
+        # hanya nyalakan bila user mengaktifkan di ConnectionConfig
+        ai.enabled = True
+    # bila ConnectionConfig pernah diisi, jangan biarkan AI mati bila
+    # field enabled di ConnectionConfig false tapi ada url+key.
+    if cc.ai_base_url and cc.ai_api_key and not ai.enabled:
+        ai.enabled = cc.ai_enabled
+    return ai
+
+
+def fetch_router_models(base_url, api_key, timeout=60):
+    """Ambil daftar model dari router AI OpenAI-compatible (GET /v1/models).
+
+    Mengembalikan list id model (str). Raise RuntimeError bila gagal.
+    Endpoint /v1/models di 9router sering lambat, jadi timeout longgar + retry.
+    """
+    if not base_url:
+        raise RuntimeError("Base URL AI belum diisi.")
+    url = base_url.rstrip("/") + "/v1/models"
+    last_err = None
+    for attempt in range(2):
+        req = urllib_request.Request(url, headers={
+            "Authorization": f"Bearer {api_key or ''}",
+            "Content-Type": "application/json",
+        })
+        try:
+            with urllib_request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            objs = (data.get("data") or []) if isinstance(data, dict) else []
+            return [m.get("id") for m in objs if m.get("id")]
+        except urllib_error.HTTPError as e:
+            detail = e.read().decode("utf-8", "ignore")[:200]
+            raise RuntimeError(f"Router menolak ({e.code}): {detail}")
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+    raise RuntimeError(f"Gagal memuat daftar model: {last_err}")
+
+
+def pick_free_model(model_ids):
+    """Pilih model free/termurah dari daftar id model router.
+
+    Prioritas:
+      1. id mengandung 'free' (mis. my-free-tiers) — tier gratis eksplisit.
+      2. model ringan: '-extra-low', '-nano', '-mini', '-low', '-lite', '-flash'.
+      3. fallback: model pertama yang bukan agentic/reasoner/thinking.
+    """
+    ids = list(model_ids)
+    if not ids:
+        return None
+    ranked = rank_free_models(ids)
+    return ranked[0] if ranked else None
+
+
+def rank_free_models(model_ids):
+    """Kembalikan list id model terurut prioritas free/ringan.
+
+    Urutan: (1) eksplisit 'free', (2) ringan (extra-low/nano/mini/low/lite/flash),
+    (3) sisanya kecuali varian berat/agentic, (4) sisanya.
+    """
+    ids = list(model_ids)
+    if not ids:
+        return []
+
+    # 1) eksplisit "free"
+    free = [m for m in ids if "free" in m.lower()]
+    # 2) ringan (urut prioritas kata kunci)
+    light_kw = ["extra-low", "nano", "mini", "low", "lite", "-flash-", "flash-lite"]
+    light = []
+    for kw in light_kw:
+        for m in ids:
+            if kw in m.lower() and m not in light:
+                light.append(m)
+    # 3) hindari varian berat/agentic
+    skip = ("agentic", "thinking", "reasoner", "opus", "pro", "ultra", "max")
+    other = [m for m in ids if not any(s in m.lower() for s in skip)]
+    other = [m for m in other if m not in free and m not in light]
+    rest = [m for m in ids if m not in free and m not in light and m not in other]
+    return free + light + other + rest
 
 
 def _apotek_apps_config():
@@ -1537,7 +1711,7 @@ def api_ai_chat(request):
     if not message:
         return JsonResponse({"error": "Pesan kosong."}, status=400)
 
-    cfg = AIConfig.get_active()
+    cfg = _effective_ai_config()
     if not cfg.enabled or not cfg.api_key or not cfg.base_url:
         return JsonResponse(
             {"error": "AI belum dikonfigurasi. Buka System Status untuk mengatur AI."},
@@ -1611,7 +1785,29 @@ def api_ai_config(request):
         if "enabled" in data:
             cfg.enabled = bool(data["enabled"])
         cfg.save()
+        # jaga konsistensi dengan ConnectionConfig (menu Config)
+        cc = _conn_cfg()
+        if cc:
+            cc.ai_enabled = cfg.enabled
+            cc.ai_base_url = cfg.base_url
+            cc.ai_model = cfg.model
+            if data.get("api_key"):
+                cc.ai_api_key = cfg.api_key
+            cc.save()
         return JsonResponse({"ok": True, "config": _ai_config_public(cfg)})
+    # baca: utamakan nilai dari ConnectionConfig (menu Config)
+    cc = _conn_cfg()
+    if cc:
+        if cc.ai_base_url:
+            cfg.base_url = cc.ai_base_url
+        if cc.ai_model:
+            cfg.model = cc.ai_model
+        if cc.ai_api_key:
+            cfg.api_key = cc.ai_api_key
+        if cc.ai_enabled:
+            cfg.enabled = True
+        elif cc.ai_base_url and cc.ai_api_key:
+            cfg.enabled = True
     return JsonResponse({"config": _ai_config_public(cfg)})
 
 

@@ -243,6 +243,9 @@
 .form-control:focus { border-color: var(--neon-cyan); box-shadow: 0 0 0 3px rgba(0,212,255,.15); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-actions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.input-with-btn { display: flex; gap: 8px; align-items: stretch; }
+.input-with-btn .form-control { flex: 1; }
+.input-with-btn .btn { white-space: nowrap; }
 .config-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 20px; margin-top: 18px;

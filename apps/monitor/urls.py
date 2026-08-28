@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/ai-config/", views.api_ai_config, name="api_ai_config"),
     path("api/config/save/", views.api_config_save, name="api_config_save"),
     path("api/config/test/", views.api_config_test, name="api_config_test"),
+    path("api/config/ai-autodiscover/", views.api_config_ai_autodiscover, name="api_config_ai_autodiscover"),
     path("api/backup/sync/", views.api_backup_sync, name="api_backup_sync"),
     path("api/topology/layout/", views.api_topology_layout, name="api_topology_layout"),
     path("api/network/stream/", views.api_network_stream, name="api_network_stream"),
