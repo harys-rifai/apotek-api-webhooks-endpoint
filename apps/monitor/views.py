@@ -462,6 +462,70 @@ def api_db_vacuum(request):
         return JsonResponse({"ok": False, "error": f"VACUUM FULL gagal: {e}"}, status=500)
 
 
+@login_required
+@require_POST
+def api_db_sqlite_vacuum(request):
+    """Jalankan VACUUM pada SQLite Monitor untuk mengembalikan ruang kosong."""
+    from django.db import connection
+    path = settings.DATABASES.get("default", {}).get("NAME")
+    try:
+        with connection.cursor() as cur:
+            cur.execute("VACUUM")
+        before = _sqlite_size(path)
+        return JsonResponse({"ok": True, "detail": f"SQLite VACUUM selesai · {_human_size(before)}"})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"SQLite VACUUM gagal: {e}"}, status=500)
+
+
+@login_required
+@require_POST
+def api_db_redis_flush(request):
+    """Jalankan FLUSHDB pada Redis (db terpilih) untuk membersihkan cache."""
+    import socket
+    import time
+
+    cfg = _apotek_apps_config()
+    url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
+    info = _parse_redis_url(url)
+
+    def encode(*args):
+        out = f"*{len(args)}\r\n".encode()
+        for a in args:
+            a = str(a).encode()
+            out += b"$%d\r\n%s\r\n" % (len(a), a)
+        return out
+
+    try:
+        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
+            if info["ssl"]:
+                import ssl as _ssl
+                sock = _ssl.create_default_context().wrap_socket(
+                    sock, server_hostname=info["host"]
+                )
+            sock.settimeout(2)
+            payload = b""
+            if info["password"]:
+                payload += encode("AUTH", info["password"])
+            payload += encode("SELECT", str(info["db"]))
+            payload += encode("FLUSHDB")
+            sock.sendall(payload)
+            raw = b""
+            deadline = time.time() + 2
+            while time.time() < deadline:
+                chunk = sock.recv(8192)
+                if not chunk:
+                    break
+                raw += chunk
+                if b"+OK" in raw or b"-" in raw:
+                    break
+        text = raw.decode(errors="replace")
+        if "+OK" in text:
+            return JsonResponse({"ok": True, "detail": f"Redis FLUSHDB selesai · db{info['db']}"})
+        return JsonResponse({"ok": False, "error": "respon tidak OK: " + text[:80]}, status=500)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"Redis FLUSHDB gagal: {e}"}, status=500)
+
+
 def _apotek_apps_dir():
     """Best-effort path to the sibling ApotekApps project."""
     import os

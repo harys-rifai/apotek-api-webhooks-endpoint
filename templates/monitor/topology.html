@@ -17,54 +17,47 @@
   .topo-stats .stat {
     font-size:.8rem; color:var(--color-muted); white-space:nowrap;
   }
-  .topo-stats .stat b { font-size:.95rem; color:var(--color-text,#e8e8f0); margin-left:.15rem; }
+  .topo-stats .stat b { font-size:.95rem; color:var(--color-text); margin-left:.15rem; }
   .topo-hint { font-size:.72rem; opacity:.8; }
   .topo-actions { display:flex; gap:.35rem; align-items:center; margin-left:auto; }
 
   .filter-btn {
     display:flex; align-items:center; justify-content:center; width:auto; text-align:left;
-    background:transparent; border:1px solid var(--color-border,#2a2a40); color:var(--color-text,#e8e8f0);
+    background:transparent; border:1px solid var(--color-border,#2a2a40); color:var(--color-text);
     padding:.4rem .55rem; border-radius:8px; font-size:.82rem; cursor:pointer; margin-bottom:0;
   }
   .filter-btn:hover { background:rgba(255,255,255,.05); border-color:var(--neon-cyan,#36e0ff); }
 
-  .topo-main { min-width:0; }
-  .topo-split { display:flex; gap:1rem; align-items:stretch; }
-  .topo-split #topoWrap { flex:1; min-width:0;
+   .topo-main { min-width:0; }
+   .topo-split { display:flex; gap:1rem; align-items:stretch; }
+   .topo-split #topoWrap { flex:1; min-width:0;
     background:
       radial-gradient(circle at 14% 0%, rgba(70,130,255,.18), transparent 38%),
       radial-gradient(circle at 86% 6%, rgba(180,90,255,.14), transparent 40%),
       radial-gradient(circle at 50% 100%, rgba(0,200,255,.10), transparent 55%),
-      #05060c;
+      var(--bg-canvas);
     border:1px solid var(--color-border,#2a2a40);
     border-radius:var(--radius-lg);
     position:relative; overflow:hidden;
-  }
-    background:
-      radial-gradient(circle at 14% 0%, rgba(70,130,255,.18), transparent 38%),
-      radial-gradient(circle at 86% 6%, rgba(180,90,255,.14), transparent 40%),
-      radial-gradient(circle at 50% 100%, rgba(0,200,255,.10), transparent 55%),
-      #05060c;
-    border:1px solid var(--color-border,#2a2a40);
-    border-radius:var(--radius-lg);
-    position:relative; overflow:hidden;
+    transition: background var(--transition), border-color var(--transition);
   }
   #topoSvg { width:100%; height:720px; display:block; }
 
-  #topoSvg .grid { stroke: rgba(120,160,255,.07); stroke-width:1; }
-  #topoSvg .grid-major { stroke: rgba(120,160,255,.12); stroke-width:1; }
+  #topoSvg .grid { stroke: var(--grid-line); stroke-width:1; }
+  #topoSvg .grid-major { stroke: var(--grid-major); stroke-width:1; }
 
 
   /* nodes */
   .node-card { cursor:grab; }
   .node-card:active { cursor:grabbing; }
   .node-base {
-    fill: rgba(28,32,54,.92); stroke: rgba(120,150,255,.45); stroke-width:1.5;
-    filter: drop-shadow(0 6px 14px rgba(0,0,0,.65));
+    fill: var(--node-fill); stroke: var(--node-stroke); stroke-width:1.5;
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,.35));
+    transition: fill var(--transition), stroke var(--transition);
   }
   .node-accent { stroke-width:4; }              /* left status bar */
-  .node-title { fill:#f4f6ff; font-size:13px; font-weight:600; font-family:inherit; }
-  .node-tech  { fill:#9aa6d6; font-size:10.5px; font-family:inherit; }
+  .node-title { fill:var(--node-title); font-size:13px; font-weight:600; font-family:inherit; }
+  .node-tech  { fill:var(--node-tech); font-size:10.5px; font-family:inherit; }
   .node-pill  { font-size:9.5px; font-weight:700; font-family:inherit; letter-spacing:.04em; }
   .node-metric{ font-size:10.5px; font-family:inherit; }
 
@@ -85,10 +78,11 @@
   .legend .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
 
   .node-tooltip {
-    position:absolute; pointer-events:none; background:#0c0c18; color:#fff;
+    position:absolute; pointer-events:none; background:var(--tooltip-bg); color:var(--tooltip-text);
     border:1px solid var(--color-border,#2a2a40); border-radius:8px;
     padding:.5rem .7rem; font-size:.75rem; max-width:240px; display:none; z-index:20;
     box-shadow:0 6px 20px rgba(0,0,0,.5);
+    transition: background var(--transition), color var(--transition);
   }
   .node-tooltip b { color:var(--neon-cyan); }
   @media (prefers-reduced-motion: reduce){
@@ -102,7 +96,7 @@
     border-radius:var(--radius-lg); padding:.85rem; min-height:720px; max-height:720px;
   }
   .net-feed__head { display:flex; align-items:center; justify-content:space-between; margin-bottom:.7rem; }
-  .net-feed__title { font-size:.82rem; font-weight:700; letter-spacing:.02em; color:#f4f6ff; }
+  .net-feed__title { font-size:.82rem; font-weight:700; letter-spacing:.02em; color:var(--feed-title); }
   .net-feed__title i { color:var(--neon-cyan,#36e0ff); margin-right:.4rem; }
   .net-feed__state { display:inline-flex; align-items:center; gap:.35rem; font-size:.68rem;
     font-weight:600; color:var(--color-muted); padding:.12rem .5rem; border-radius:999px;
@@ -123,7 +117,7 @@
   .ns-stat { display:flex; flex-direction:column; align-items:center; gap:.1rem;
     padding:.5rem .25rem; border-radius:10px; background:rgba(255,255,255,.03);
     border:1px solid var(--color-border,#2a2a40); }
-  .ns-stat__val { font-size:1.05rem; font-weight:700; color:#eef0ff; line-height:1;
+  .ns-stat__val { font-size:1.05rem; font-weight:700; color:var(--ns-val); line-height:1;
     font-variant-numeric:tabular-nums; }
   .ns-stat__lbl { font-size:.58rem; text-transform:uppercase; letter-spacing:.05em;
     color:var(--color-muted); }
@@ -135,8 +129,8 @@
     border-radius:14px; padding:.7rem .75rem; margin-bottom:.85rem;
   }
   .ai-insight__head { display:flex; align-items:center; gap:.45rem; font-size:.74rem;
-    font-weight:700; color:#cdbcff; margin-bottom:.55rem; }
-  .ai-insight__head i { color:#9b8cff; }
+    font-weight:700; color:var(--ai-head); margin-bottom:.55rem; }
+  .ai-insight__head i { color:var(--neon-purple,#9b8cff); }
   .ai-insight__status { margin-left:auto; font-size:.62rem; font-weight:600;
     letter-spacing:.03em; text-transform:uppercase; color:var(--color-muted);
     padding:.08rem .45rem; border-radius:999px; background:rgba(255,255,255,.06); }
@@ -144,14 +138,14 @@
   .ai-insight__status.thinking { color:#ffd23f; background:rgba(255,210,63,.12); }
   .ai-insight__list { list-style:none; margin:0; padding:0; display:flex;
     flex-direction:column; gap:.4rem; max-height:300px; overflow-y:auto; }
-  .ai-item { display:grid; grid-template-columns:auto 1fr; column-gap:.5rem; row-gap:.05rem;
+  .ai-item { display:grid; grid-template-columns:16px auto 1fr; column-gap:.5rem; row-gap:.05rem;
     align-items:baseline; padding:.4rem .55rem; border-radius:9px;
     background:rgba(255,255,255,.03); border-left:3px solid rgba(124,92,255,.6); }
-  .ai-item__icon { grid-row:1 / span 2; align-self:center; font-size:.7rem;
-    color:#9b8cff; width:14px; text-align:center; }
-  .ai-item__label { font-size:.56rem; font-weight:700; letter-spacing:.05em;
+  .ai-item__icon { grid-column:1; grid-row:1 / span 2; align-self:center; font-size:.72rem;
+    color:#9b8cff; text-align:center; }
+  .ai-item__label { grid-column:2; font-size:.56rem; font-weight:700; letter-spacing:.05em;
     text-transform:uppercase; color:#9b8cff; }
-  .ai-item__value { font-size:.68rem; line-height:1.32; color:#e6e7f6; }
+  .ai-item__value { grid-column:3; font-size:.68rem; line-height:1.32; color:var(--ai-value); }
   .ai-item__value code { font-size:.64rem; background:rgba(255,255,255,.08);
     padding:.05rem .25rem; border-radius:4px; color:#9b8cff; }
   .ai-item--info { border-left-color:#7a7a9d; }
@@ -170,7 +164,7 @@
   .net-feed__subhead { display:flex; align-items:center; gap:.4rem; }
   .db-size__btn {
     margin-left:auto; background:transparent; border:1px solid var(--color-border,#2a2a40);
-    color:#c8cdf0; border-radius:6px; width:22px; height:22px; cursor:pointer;
+    color:var(--icon-color); border-radius:6px; width:22px; height:22px; cursor:pointer;
     display:inline-flex; align-items:center; justify-content:center; font-size:.7rem;
     transition:transform .2s ease, color .15s ease, border-color .15s ease; }
   .db-size__btn:hover { color:var(--neon-cyan,#36e0ff); border-color:var(--neon-cyan,#36e0ff); }
@@ -187,19 +181,19 @@
   }
   @keyframes feedIn { from{opacity:0; transform:translateY(-4px);} to{opacity:1;} }
   .db-size__icon { font-size:.85rem; text-align:center; }
-  .db-size__name { color:#c8cdf0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .db-size__val { font-weight:700; color:var(--color-text,#e8e8f0); font-variant-numeric:tabular-nums; }
+  .db-size__name { color:var(--db-name); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .db-size__val { font-weight:700; color:var(--color-text); font-variant-numeric:tabular-nums; }
   .db-size__meta {
     grid-column:2 / 4; font-size:.66rem; color:var(--color-muted);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .db-size__sub {
-    grid-column:2 / 4; font-size:.66rem; color:#c8cdf0;
+    grid-column:2 / 4; font-size:.66rem; color:var(--db-sub);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .db-size__sub b { color:#36ff9e; font-variant-numeric:tabular-nums; }
   .db-size__vacuum {
     grid-column:2 / 4; margin-top:.25rem; justify-self:start;
     background:transparent; border:1px solid var(--color-border,#2a2a40);
-    color:#9aa6d6; border-radius:6px; padding:.18rem .5rem; cursor:pointer;
+    color:var(--icon-color); border-radius:6px; padding:.18rem .5rem; cursor:pointer;
     font-size:.66rem; display:inline-flex; align-items:center; gap:.3rem;
     transition:color .15s ease, border-color .15s ease; }
   .db-size__vacuum:hover { color:#36e0ff; border-color:#36e0ff; }
@@ -213,6 +207,13 @@
   @media (max-width:1100px){
     .topo-split{ flex-direction:column; }
     .net-feed{ width:auto; flex:none; max-height:260px; min-height:0; }
+  }
+  /* theme transition — semua kontainer topology ikut memudar bersama body
+     agar tidak ada kedip (flash) saat ganti tema */
+  .topo-panel, .net-feed, .legend .item, .ai-insight, .db-size__row,
+  .topo-split #topoWrap, .node-tooltip {
+    transition: background var(--transition), color var(--transition),
+                border-color var(--transition);
   }</style>
 {% endblock %}
 
@@ -309,6 +310,9 @@
         <span class="db-size__name">Redis Cache</span>
         <span class="db-size__val" id="dbRedis">—</span>
         <span class="db-size__meta" id="dbRedisMeta"></span>
+        <button type="button" class="db-size__vacuum" id="dbRedisFlushBtn" title="Jalankan FLUSHDB (Redis)">
+          <i class="fa-solid fa-broom"></i> FLUSHDB
+        </button>
       </li>
     </ul>
   </aside>
@@ -1015,15 +1019,16 @@
   setInterval(refreshDbSizes, DB_REFRESH_MS);
   setInterval(renderDbCountdown, 1000);
 
-  // ── VACUUM FULL (PostgreSQL) ─────────────────────────────────────
-  const dbVacuumBtn = document.getElementById("dbVacuumBtn");
-  if (dbVacuumBtn) {
-    dbVacuumBtn.addEventListener("click", async () => {
-      dbVacuumBtn.disabled = true;
-      dbVacuumBtn.classList.add("spin");
-      dbVacuumBtn.classList.remove("ok");
+  // ── Database maintenance buttons ─────────────────────────────────
+  function wireMaintBtn(btnId, url, okText) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.classList.add("spin");
+      btn.classList.remove("ok");
       try {
-        const res = await fetch("{% url 'api_db_vacuum' %}", {
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json",
                      "X-Requested-With": "XMLHttpRequest",
@@ -1031,20 +1036,23 @@
         });
         const d = await res.json().catch(() => ({}));
         if (d.ok) {
-          dbVacuumBtn.classList.add("ok");
-          dbVacuumBtn.title = d.detail || "VACUUM FULL selesai";
-          refreshDbSizes();
+          btn.classList.add("ok");
+          btn.title = d.detail || okText;
         } else {
-          dbVacuumBtn.title = "Gagal: " + (d.error || "unknown");
+          btn.title = "Gagal: " + (d.error || "unknown");
         }
       } catch (e) {
-        dbVacuumBtn.title = "Gagal menjalankan VACUUM FULL";
+        btn.title = "Gagal menjalankan maintenance";
       } finally {
-        dbVacuumBtn.disabled = false;
-        dbVacuumBtn.classList.remove("spin");
+        btn.disabled = false;
+        btn.classList.remove("spin");
+        refreshDbSizes();
       }
     });
   }
+  wireMaintBtn("dbVacuumBtn", "{% url 'api_db_vacuum' %}", "VACUUM FULL selesai");
+  wireMaintBtn("dbSqliteVacuumBtn", "{% url 'api_db_sqlite_vacuum' %}", "SQLite VACUUM selesai");
+  wireMaintBtn("dbRedisFlushBtn", "{% url 'api_db_redis_flush' %}", "Redis FLUSHDB selesai");
 
   function netInWindowInc() { _inWindow++; }
   setInterval(() => {
@@ -1075,11 +1083,51 @@
       info: "ai-item--info", warning: "ai-item--warning",
       critical: "ai-item--critical", success: "ai-item--success",
     };
+    const aiIconMap = {
+      "Traffic": "fa-arrow-right-arrow-left",
+      "Success rate": "fa-chart-line",
+      "Performance": "fa-gauge-high",
+      "Webhooks": "fa-bolt",
+      "Services": "fa-cubes",
+      "PostgreSQL": "svg-pg",
+      "Redis": "svg-redis",
+      "Media Storage": "fa-photo-film",
+      "Nginx": "svg-nginx",
+      "Python Runtime": "svg-python",
+      "System Host": "fa-microchip",
+      "Email Monitor": "fa-envelope",
+      "Monitor SQLite": "svg-sqlite",
+      "Saran AI": "fa-lightbulb",
+    };
+    const aiSvgMap = {
+      "svg-pg":
+        '<svg viewBox="0 0 24 24" width="13" height="13" fill="#336791">' +
+        '<path d="M12 2.3c3.9 0 7 1.35 7 4.1 0 1.5-.83 2.85-2.15 3.78.62.86 1 1.9 1 3.02 0 1.95-1.2 3.6-3 4.54.5 1.05.5 2.05-.13 2.86H9.28c-.63-.8-.63-1.8-.13-2.86-1.8-.94-3-2.6-3-4.54 0-1.12.38-2.16 1-3.02C5.83 8.25 5 6.9 5 5.4 5 3.65 8.1 2.3 12 2.3zm0 2.05c-2.9 0-4.8.92-4.8 2.05 0 .85.9 1.5 2.1 1.9l.7 1.7 1.4-1.95h1.2l1.4 1.95.7-1.7c1.2-.4 2.1-1.05 2.1-1.9 0-1.13-1.9-2.05-4.8-2.05zM9.1 11.5c-1.05.6-1.75 1.5-1.75 2.6 0 1.2.9 2.25 2.4 2.9l.7-.55-.2-1.7-.8.13.25-1.7-.85-.5.45-1.55-.95.42.7-1.05zm5.8 0 .7 1.05-.95-.42.45 1.55-.85.5.25 1.7-.8-.13-.2 1.7.7.55c1.5-.65 2.4-1.7 2.4-2.9 0-1.1-.7-2-1.75-2.6z"/></svg>',
+      "svg-redis":
+        '<svg viewBox="0 0 24 24" width="13" height="13" fill="#d82c20">' +
+        '<path d="M3 7.2 12 4l9 3.2-9 3.1L3 7.2zm0 3.4 9 3.1 9-3.1-2.3 5.6L12 19.6 5.3 16.2 3 10.6zm2.4 1.7.55 4.2L12 18.6l6.05-2.3.55-4.2-3.05 1.2-3.5-1.5-3.5 1.5-3.05-1.2z"/></svg>',
+      "svg-nginx":
+        '<svg viewBox="0 0 24 24" width="13" height="13">' +
+        '<rect width="24" height="24" rx="4" fill="#009639"/>' +
+        '<path fill="#fff" d="M13.2 6h-2.3v9.1h2.3V6zm-3.7 1.3H6.3v1.4h1.5v6.4h2.3V7.3h-.6zm8 0h-2.3v7.8h2.3V7.3zm-3.5 0h-2.3v7.8h2.3V7.3z"/></svg>',
+      "svg-python":
+        '<svg viewBox="0 0 24 24" width="13" height="13">' +
+        '<path fill="#3776ab" d="M11.9 2c-2.5 0-4.3.4-4.3 2.1v1.5h4.4v.5H5.8C4 6.1 3.2 7.2 3.2 9.8c0 2.6.7 4 3 4h1.3v-2c0-1.8 1.7-2.7 3.4-2.7h3.9c1.6 0 2.9-1.3 2.9-2.9V4.1C18.7 2.8 17.3 2 15.4 2h-3.5zm-1.7 1.4c.5 0 .8.4.8.8s-.4.8-.8.8-.8-.4-.8-.8.3-.8.8-.8z"/>' +
+        '<path fill="#ffd43b" d="M12.1 22c2.5 0 4.3-.4 4.3-2.1v-1.5h-4.4v-.5h5.2c1.7 0 2.5-1.1 2.5-3.7 0-2.6-.7-4-3-4h-1.3v2c0 1.8-1.7 2.7-3.4 2.7H6.1c-1.6 0-2.9 1.3-2.9 2.9v3.4C3.3 21.2 4.7 22 6.6 22h5.5zm1.7-1.4c-.5 0-.8-.4-.8-.8s.4-.8.8-.8.8.4.8.8-.3.8-.8.8z"/></svg>',
+      "svg-sqlite":
+        '<svg viewBox="0 0 24 24" width="13" height="13" fill="#1b6cb3">' +
+        '<path d="M12 2c4 0 8 1 8 1v5.2C20 13.3 16.4 17 12 17S4 13.3 4 8.2V3s8-1 8-1zm0 3.4c-2.1 0-3.6.5-3.6 1.5 0 .9 1.5 1.6 3.6 1.6s3.6-.7 3.6-1.6C15.6 5.9 14.1 5.4 12 5.4zM7 11.3c-.4.3-.7.8-.7 1.4 0 1.2 1.1 2.3 5.7 2.3s5.7-1.1 5.7-2.3c0-.6-.3-1.1-.7-1.4-1.7 1-6.1 1.2-10 0zm.3 2.7c-1.3.7-2 .1-2 .1C4.6 15.2 5.6 18 12 18s7.4-2.8 6.7-3.9c0 0-.7.6-2-.1-1.2.8-4.1 1-5.4 0z"/></svg>',
+    };
     const items = (d.details && d.details.length) ? d.details : [{ label: "AI", value: d.summary || "—" }];
     items.forEach(it => {
       const li = document.createElement("li");
       li.className = "ai-item " + (sevClass[it.severity] || "ai-item--info");
-      li.innerHTML = `<span class="ai-item__label">${it.label}</span>` +
+      const key = aiIconMap[it.label] || "fa-circle-info";
+      const iconHtml = aiSvgMap[key]
+        ? aiSvgMap[key]
+        : `<i class="fa-solid ${key}"></i>`;
+      li.innerHTML = `<span class="ai-item__icon">${iconHtml}</span>` +
+        `<span class="ai-item__label">${it.label}</span>` +
         `<span class="ai-item__value">${it.value}</span>`;
       aiTextEl.appendChild(li);
     });

@@ -53,6 +53,28 @@
 
     --sidebar-width: 260px;
     --topbar-height: 64px;
+
+    /* === Topology / Smartscape specific === */
+    --color-text: #e8e8f0;
+    --color-muted: #9090a8;
+    --color-border: rgba(255, 255, 255, 0.06);
+    --bg-canvas: #05060c;
+    --node-fill: rgba(28, 32, 54, 0.92);
+    --node-stroke: rgba(120, 150, 255, 0.45);
+    --node-title: #f4f6ff;
+    --node-tech: #9aa6d6;
+    --tooltip-bg: #0c0c18;
+    --tooltip-text: #ffffff;
+    --feed-title: #f4f6ff;
+    --feed-accent: #c8cdf0;
+    --ns-val: #eef0ff;
+    --ai-value: #e6e7f6;
+    --ai-head: #cdbcff;
+    --db-name: #c8cdf0;
+    --db-sub: #c8cdf0;
+    --icon-color: #9aa6d6;
+    --grid-line: rgba(120, 160, 255, 0.07);
+    --grid-major: rgba(120, 160, 255, 0.12);
 }
 
 /* === NEON WHITE MODE === */
@@ -90,6 +112,28 @@
     --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.1);
     --shadow-neon: 0 0 15px rgba(0, 136, 204, 0.1);
+
+    /* === Topology / Smartscape specific (light) === */
+    --color-text: #1a1a2e;
+    --color-muted: #5a5a72;
+    --color-border: rgba(0, 0, 0, 0.08);
+    --bg-canvas: #eef1f7;
+    --node-fill: rgba(255, 255, 255, 0.96);
+    --node-stroke: rgba(0, 136, 204, 0.35);
+    --node-title: #1a1a2e;
+    --node-tech: #5a5a72;
+    --tooltip-bg: #ffffff;
+    --tooltip-text: #1a1a2e;
+    --feed-title: #1a1a2e;
+    --feed-accent: #3a3a52;
+    --ns-val: #1a1a2e;
+    --ai-value: #3a3a52;
+    --ai-head: #7722bb;
+    --db-name: #1a1a2e;
+    --db-sub: #3a3a52;
+    --icon-color: #5a5a72;
+    --grid-line: rgba(0, 0, 0, 0.05);
+    --grid-major: rgba(0, 0, 0, 0.09);
 }
 
 /* ==========================================
@@ -113,7 +157,7 @@ body {
     line-height: 1.6;
     overflow-x: hidden;
     min-height: 100vh;
-    transition: background var(--transition-slow), color var(--transition-slow);
+    transition: background var(--transition), color var(--transition);
 }
 
 a {
