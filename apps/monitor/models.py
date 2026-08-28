@@ -247,6 +247,84 @@ class AIConfig(models.Model):
         return k[:6] + "****" + k[-4:]
 
 
+class ConnectionConfig(models.Model):
+    """Pengaturan koneksi datastore & AI yang bisa diedit dari menu Config.
+
+    Satu baris aktif (singleton). Field bersifat opsional — bila kosong, sistem
+    akan fallback ke nilai dari ApotekApps/.env agar kompatibel dengan behaviour
+    lama.
+    """
+
+    # SQLite (database Monitor sendiri)
+    sqlite_path = models.CharField(
+        max_length=512, blank=True, default="",
+        help_text="Path file db.sqlite3 Monitor. Kosongkan untuk default.",
+    )
+
+    # PostgreSQL (replica ApotekApps)
+    pg_host = models.CharField(max_length=255, blank=True, default="")
+    pg_port = models.IntegerField(blank=True, null=True)
+    pg_name = models.CharField(max_length=255, blank=True, default="")
+    pg_user = models.CharField(max_length=255, blank=True, default="")
+    pg_password = models.CharField(max_length=255, blank=True, default="")
+
+    # Redis
+    redis_url = models.CharField(
+        max_length=512, blank=True, default="",
+        help_text="redis://[:password@]host:port/db — kosongkan untuk default.",
+    )
+
+    # AI (sinkron dengan AIConfig)
+    ai_enabled = models.BooleanField(default=False)
+    ai_base_url = models.CharField(max_length=255, blank=True, default="")
+    ai_model = models.CharField(max_length=100, blank=True, default="")
+    ai_api_key = models.CharField(max_length=255, blank=True, default="")
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Connection Config"
+        verbose_name_plural = "Connection Config"
+
+    def __str__(self):
+        return f"ConnectionConfig(updated={self.updated_at:%Y-%m-%d %H:%M})"
+
+    @classmethod
+    def get_active(cls):
+        obj = cls.objects.first()
+        if not obj:
+            obj = cls.objects.create()
+        return obj
+
+    def mask_pg_password(self):
+        if not self.pg_password:
+            return ""
+        k = self.pg_password
+        if len(k) <= 4:
+            return "****"
+        return k[:2] + "****" + k[-2:]
+
+    def mask_redis_password(self):
+        from urllib.parse import urlparse, unquote
+        if not self.redis_url:
+            return ""
+        parsed = urlparse(self.redis_url)
+        if not parsed.password:
+            return ""
+        k = unquote(parsed.password)
+        if len(k) <= 4:
+            return "****"
+        return k[:2] + "****" + k[-2:]
+
+    def mask_ai_key(self):
+        if not self.ai_api_key:
+            return ""
+        k = self.ai_api_key
+        if len(k) <= 8:
+            return "****" + k[-2:]
+        return k[:6] + "****" + k[-4:]
+
+
 class AIChatLog(models.Model):
     """Log interaksi dengan AI chatbot Monitor."""
 

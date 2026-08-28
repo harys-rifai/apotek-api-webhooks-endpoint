@@ -22,6 +22,14 @@
     <span class="dock__tile"><i class="fa-solid fa-truck-medical"></i></span>
   </a>
 
+  <span class="dock__sep"></span>
+
+  {% if request.user.is_staff or request.user.is_superuser %}
+  <a href="{% url 'config' %}" class="dock__item {% if active_menu == 'config' %}active{% endif %}" data-tip="Config">
+    <span class="dock__tile"><i class="fa-solid fa-sliders"></i></span>
+  </a>
+  {% endif %}
+
   <form method="post" action="{% url 'logout' %}" class="dock__form">
     {% csrf_token %}
     <button type="submit" class="dock__item dock__item--danger" data-tip="Logout">

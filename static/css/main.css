@@ -232,6 +232,38 @@
 .checkbox { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--text-secondary); }
 .checkbox input { width: 16px; height: 16px; }
 .hint { font-size: .72rem; color: var(--text-muted); }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: .76rem; font-weight: 600; color: var(--text-secondary); }
+.form-control {
+  width: 100%; padding: 9px 12px; font-size: .85rem;
+  background: var(--bg-input, var(--bg-card)); color: var(--text-primary);
+  border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px);
+  outline: none; transition: border-color var(--transition), box-shadow var(--transition);
+}
+.form-control:focus { border-color: var(--neon-cyan); box-shadow: 0 0 0 3px rgba(0,212,255,.15); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-actions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.config-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px; margin-top: 18px;
+}
+.status-badge {
+  font-size: .68rem; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+  white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis;
+  border: 1px solid var(--border-color); color: var(--text-muted);
+}
+.status-badge--ok   { background: rgba(46,204,113,.15); color: #2ecc71; border-color: rgba(46,204,113,.4); }
+.status-badge--warn { background: rgba(241,196,15,.15); color: #f1c40f; border-color: rgba(241,196,15,.4); }
+.status-badge--err  { background: rgba(231,76,60,.15);  color: #e74c3c;  border-color: rgba(231,76,60,.4); }
+.status-badge--idle { background: var(--bg-card); }
+
+/* ── Config collapsible cards ── */
+.card--collapsible .card__header.cfg-toggle { cursor: pointer; user-select: none; }
+.card__header-right { display: flex; align-items: center; gap: 10px; }
+.cfg-chevron { font-size: .8rem; color: var(--text-muted); transition: transform var(--transition); }
+.card--collapsible.is-collapsed .cfg-chevron { transform: rotate(-90deg); }
+.card--collapsible.is-collapsed .cfg-body { display: none; }
+
 
 /* ── Card header/body helpers (theme.css punya .card tapi tanpa __header) ── */
 .card__header {

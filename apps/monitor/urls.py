@@ -11,6 +11,7 @@ urlpatterns = [
     path("topology/", views.topology_view, name="topology"),
     path("alerts/", views.alerts_view, name="alerts_page"),
     path("deliveries/", views.delivery_list, name="delivery_list"),
+    path("config/", views.config_view, name="config"),
     # AJAX / API
     path("api/ping/<int:pk>/", views.api_ping, name="api_ping"),
     path("api/endpoint/<int:pk>/stats/", views.api_endpoint_stats, name="api_endpoint_stats"),
@@ -25,6 +26,8 @@ urlpatterns = [
     path("api/ai-chat/", views.api_ai_chat, name="api_ai_chat"),
     path("api/ai-chat/history/", views.api_ai_chat_history, name="api_ai_chat_history"),
     path("api/ai-config/", views.api_ai_config, name="api_ai_config"),
+    path("api/config/save/", views.api_config_save, name="api_config_save"),
+    path("api/config/test/", views.api_config_test, name="api_config_test"),
     path("api/backup/sync/", views.api_backup_sync, name="api_backup_sync"),
     path("api/topology/layout/", views.api_topology_layout, name="api_topology_layout"),
     path("api/network/stream/", views.api_network_stream, name="api_network_stream"),

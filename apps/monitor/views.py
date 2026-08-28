@@ -1,7 +1,7 @@
 import json
 from datetime import timedelta
 
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Count, Avg, Q
 from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404
@@ -11,7 +11,8 @@ from django.views.decorators.http import require_POST
 from django.conf import settings
 
 from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
-                      AiInsight, NodeLayout, AIConfig, AIChatLog)
+                      AiInsight, NodeLayout, AIConfig, AIChatLog,
+                      ConnectionConfig)
 from .services import call_api
 from .ai_insight import generate_ai_insight
 from .ai_chat import call_ai_chat
@@ -235,6 +236,128 @@ def alerts_view(request):
         "unread": Alert.objects.filter(is_read=False).count(),
     }
     return render(request, "monitor/alerts.html", context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.is_staff)
+def config_view(request):
+    """Halaman Config: atur koneksi SQLite, PostgreSQL, Redis, dan AI."""
+    cc = ConnectionConfig.get_active()
+    context = {
+        "active_menu": "config",
+        "cfg": cc,
+        "ai_cfg": AIConfig.get_active(),
+        "sqlite_path": str(settings.DATABASES.get("default", {}).get("NAME")),
+    }
+    return render(request, "monitor/config.html", context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.is_staff)
+@require_POST
+def api_config_save(request):
+    """Simpan pengaturan koneksi dari halaman Config."""
+    import os
+    cc = ConnectionConfig.get_active()
+    try:
+        data = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"error": "Payload JSON tidak valid."}, status=400)
+
+    section = data.get("section")
+    if section == "sqlite":
+        cc.sqlite_path = (data.get("sqlite_path") or "").strip()
+    elif section == "postgres":
+        cc.pg_host = (data.get("pg_host") or "").strip()
+        if data.get("pg_port"):
+            try:
+                cc.pg_port = int(data["pg_port"])
+            except (TypeError, ValueError):
+                return JsonResponse({"error": "Port PostgreSQL harus angka."}, status=400)
+        else:
+            cc.pg_port = None
+        cc.pg_name = (data.get("pg_name") or "").strip()
+        cc.pg_user = (data.get("pg_user") or "").strip()
+        if data.get("pg_password"):
+            cc.pg_password = data["pg_password"]
+    elif section == "redis":
+        cc.redis_url = (data.get("redis_url") or "").strip()
+    elif section == "ai":
+        cc.ai_enabled = bool(data.get("ai_enabled", False))
+        cc.ai_base_url = (data.get("ai_base_url") or "").strip()
+        cc.ai_model = (data.get("ai_model") or "").strip()
+        if data.get("ai_api_key"):
+            cc.ai_api_key = data["ai_api_key"]
+    else:
+        return JsonResponse({"error": "Section tidak dikenal."}, status=400)
+
+    cc.save()
+
+    # Sinkronkan bagian AI ke AIConfig agar chatbot ikut terupdate.
+    if section == "ai":
+        ai = AIConfig.get_active()
+        ai.enabled = cc.ai_enabled
+        ai.base_url = cc.ai_base_url
+        ai.model = cc.ai_model
+        if data.get("ai_api_key"):
+            ai.api_key = cc.ai_api_key
+        ai.save()
+
+    return JsonResponse({
+        "ok": True,
+        "config": {
+            "sqlite_path": cc.sqlite_path,
+            "pg_host": cc.pg_host, "pg_port": cc.pg_port,
+            "pg_name": cc.pg_name, "pg_user": cc.pg_user,
+            "pg_password_masked": cc.mask_pg_password(),
+            "redis_url": cc.redis_url,
+            "redis_password_masked": cc.mask_redis_password(),
+            "ai_enabled": cc.ai_enabled, "ai_base_url": cc.ai_base_url,
+            "ai_model": cc.ai_model, "ai_api_key_masked": cc.mask_ai_key(),
+        },
+    })
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.is_staff)
+def api_config_test(request):
+    """Uji koneksi untuk satu section (sqlite/postgres/redis/ai)."""
+    section = request.GET.get("section", "")
+    cfg = _apotek_apps_config()
+    result = {"section": section, "status": "unknown", "detail": ""}
+
+    if section == "postgres":
+        status, detail = _probe_apotek_db()
+        result.update(status=status, detail=detail)
+    elif section == "redis":
+        status, detail, meta = _probe_redis()
+        result.update(status=status, detail=detail, **meta)
+    elif section == "sqlite":
+        path = (ConnectionConfig.get_active().sqlite_path
+                or str(settings.DATABASES.get("default", {}).get("NAME")))
+        try:
+            import os
+            if os.path.exists(path):
+                result.update(status="healthy", detail=f"file ada · {os.path.getsize(path)} bytes")
+            else:
+                result.update(status="critical", detail="file tidak ditemukan")
+        except Exception as e:
+            result.update(status="critical", detail=str(e))
+    elif section == "ai":
+        ai = AIConfig.get_active()
+        if not ai.enabled or not ai.api_key or not ai.base_url:
+            result.update(status="warning", detail="AI belum diaktifkan/terisi lengkap")
+        else:
+            try:
+                messages_ = [{"role": "user", "content": "ping"}]
+                call_ai_chat(messages_, config=ai, temperature=0)
+                result.update(status="healthy", detail="AI merespons")
+            except Exception as e:
+                result.update(status="critical", detail=f"gagal: {e}")
+    else:
+        return JsonResponse({"error": "Section tidak dikenal."}, status=400)
+
+    return JsonResponse(result)
 
 
 # ── API Actions (AJAX) ────────────────────────────────────────────────────────
@@ -540,16 +663,49 @@ def _apotek_apps_dir():
     return os.path.join(os.path.dirname(str(settings.BASE_DIR)), "ApotekApps")
 
 
+def _conn_cfg():
+    """Singleton ConnectionConfig (pengaturan dari menu Config)."""
+    try:
+        return ConnectionConfig.get_active()
+    except Exception:
+        return None
+
+
 def _apotek_apps_config():
-    """Read ApotekApps/.env (best-effort). Returns a getter with defaults."""
+    """Read ApotekApps/.env (best-effort). Returns a getter with defaults.
+
+    Menambahkan override dari ConnectionConfig bila diisi oleh user.
+    """
     import os
     apps_env = os.path.join(_apotek_apps_dir(), ".env")
     try:
         from decouple import Config, RepositoryEnv
         cfg = Config(RepositoryEnv(apps_env))
-        return lambda key, default=None: cfg.get(key, default=default)
+        base = lambda key, default=None: cfg.get(key, default=default)
     except Exception:
-        return lambda key, default=None: default
+        base = lambda key, default=None: default
+
+    cc = _conn_cfg()
+    overrides = {}
+    if cc:
+        if cc.pg_host:
+            overrides["DB_HOST"] = cc.pg_host
+        if cc.pg_port:
+            overrides["DB_PORT"] = str(cc.pg_port)
+        if cc.pg_name:
+            overrides["DB_NAME"] = cc.pg_name
+        if cc.pg_user:
+            overrides["DB_USER"] = cc.pg_user
+        if cc.pg_password:
+            overrides["DB_PASSWORD"] = cc.pg_password
+        if cc.redis_url:
+            overrides["REDIS_URL"] = cc.redis_url
+
+    def getter(key, default=None):
+        if key in overrides:
+            return overrides[key]
+        return base(key, default)
+    return getter
 
 
 def _probe_apotek_db():

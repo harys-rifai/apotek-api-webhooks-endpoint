@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Config — OrchestrationApps{% endblock %}
+
+{% block content %}
+<section class="page">
+  <div class="page__head">
+    <div>
+      <h1 class="page__title"><i class="fa-solid fa-sliders"></i> Config</h1>
+      <p class="page__sub">Atur koneksi database, Redis, dan AI. Perubahan disimpan &amp; langsung dipakai oleh sistem.</p>
+    </div>
+  </div>
+
+  <div id="cfgAlert" style="display:none" class="alert" style="margin-bottom:1rem"></div>
+
+  <div class="config-grid">
+
+    <!-- SQLite -->
+    <div class="card card--collapsible">
+      <div class="card__header cfg-toggle" data-target="body-sqlite">
+        <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-cyan)"></i> SQLite (Monitor)</h2>
+        <span class="card__header-right">
+          <span class="status-badge" id="status-sqlite" data-section="sqlite">—</span>
+          <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+        </span>
+      </div>
+      <div class="card__body cfg-body" id="body-sqlite">
+        <form class="form cfg-form" data-section="sqlite">
+          <div class="form-group">
+            <label for="sqlite_path">Path file db.sqlite3</label>
+            <input type="text" id="sqlite_path" name="sqlite_path" class="form-control"
+                   value="{{ cfg.sqlite_path|default:sqlite_path }}" placeholder="{{ sqlite_path }}"/>
+            <small class="hint">Kosongkan untuk menggunakan default <code>{{ sqlite_path }}</code>.</small>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline btn-sm test-btn" data-section="sqlite"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- PostgreSQL -->
+    <div class="card card--collapsible">
+      <div class="card__header cfg-toggle" data-target="body-postgres">
+        <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-magenta)"></i> PostgreSQL (ApotekApps)</h2>
+        <span class="card__header-right">
+          <span class="status-badge" id="status-postgres" data-section="postgres">—</span>
+          <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+        </span>
+      </div>
+      <div class="card__body cfg-body" id="body-postgres">
+        <form class="form cfg-form" data-section="postgres">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="pg_host">Host</label>
+              <input type="text" id="pg_host" name="pg_host" class="form-control" value="{{ cfg.pg_host }}" placeholder="localhost"/>
+            </div>
+            <div class="form-group">
+              <label for="pg_port">Port</label>
+              <input type="number" id="pg_port" name="pg_port" class="form-control" value="{{ cfg.pg_port|default:'' }}" placeholder="5432"/>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="pg_name">Database</label>
+            <input type="text" id="pg_name" name="pg_name" class="form-control" value="{{ cfg.pg_name }}" placeholder="apotek_pos"/>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="pg_user">User</label>
+              <input type="text" id="pg_user" name="pg_user" class="form-control" value="{{ cfg.pg_user }}" placeholder="postgres"/>
+            </div>
+            <div class="form-group">
+              <label for="pg_password">Password</label>
+              <input type="password" id="pg_password" name="pg_password" class="form-control" placeholder="{{ cfg.mask_pg_password|default:'biarkan kosong jika tidak berubah' }}"/>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline btn-sm test-btn" data-section="postgres"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Redis -->
+    <div class="card card--collapsible">
+      <div class="card__header cfg-toggle" data-target="body-redis">
+        <h2 class="card__title"><i class="fa-solid fa-bolt" style="color:var(--neon-yellow)"></i> Redis Cache</h2>
+        <span class="card__header-right">
+          <span class="status-badge" id="status-redis" data-section="redis">—</span>
+          <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+        </span>
+      </div>
+      <div class="card__body cfg-body" id="body-redis">
+        <form class="form cfg-form" data-section="redis">
+          <div class="form-group">
+            <label for="redis_url">Redis URL</label>
+            <input type="text" id="redis_url" name="redis_url" class="form-control"
+                   value="{{ cfg.redis_url }}" placeholder="redis://127.0.0.1:6379/1"/>
+            <small class="hint">Format: <code>redis://[:password@]host:port/db</code>. Kosongkan untuk default.</small>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline btn-sm test-btn" data-section="redis"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- AI -->
+    <div class="card card--collapsible">
+      <div class="card__header cfg-toggle" data-target="body-ai">
+        <h2 class="card__title"><i class="fa-solid fa-robot" style="color:var(--neon-purple)"></i> AI Assistant</h2>
+        <span class="card__header-right">
+          <span class="status-badge" id="status-ai" data-section="ai">—</span>
+          <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+        </span>
+      </div>
+      <div class="card__body cfg-body" id="body-ai">
+        <form class="form cfg-form" data-section="ai">
+          <label class="checkbox">
+            <input type="checkbox" name="ai_enabled" id="ai_enabled" {% if cfg.ai_enabled %}checked{% endif %}/>
+            <span>Aktifkan AI Assistant</span>
+          </label>
+          <div class="form-group">
+            <label for="ai_base_url">Base URL (OpenAI-compatible)</label>
+            <input type="text" id="ai_base_url" name="ai_base_url" class="form-control"
+                   value="{{ cfg.ai_base_url }}" placeholder="http://localhost:20128/v1"/>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ai_model">Model</label>
+              <input type="text" id="ai_model" name="ai_model" class="form-control"
+                     value="{{ cfg.ai_model }}" placeholder="gpt-4o"/>
+            </div>
+            <div class="form-group">
+              <label for="ai_api_key">API Key</label>
+              <input type="password" id="ai_api_key" name="ai_api_key" class="form-control"
+                     placeholder="{{ cfg.mask_ai_key|default:'biarkan kosong jika tidak berubah' }}"/>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline btn-sm test-btn" data-section="ai"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  function getCookie(name) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function headers() {
+    return {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken')
+    };
+  }
+  function showAlert(msg, type) {
+    var el = document.getElementById('cfgAlert');
+    el.style.display = 'block';
+    el.className = 'alert alert--' + (type || 'info');
+    el.innerHTML = '<i class="fa-solid fa-circle-info"></i> ' + msg;
+    setTimeout(function () { el.style.display = 'none'; }, 4000);
+  }
+  function setStatus(section, status, detail) {
+    var el = document.getElementById('status-' + section);
+    if (!el) return;
+    var cls = status === 'healthy' ? 'ok' : status === 'warning' ? 'warn' : status === 'critical' ? 'err' : 'idle';
+    el.className = 'status-badge status-badge--' + cls;
+    el.textContent = (status === 'healthy' ? 'OK' : status === 'warning' ? 'Warn' : status === 'critical' ? 'Error' : 'Idle')
+      + (detail ? ' · ' + detail : '');
+  }
+
+  // Simpan per section
+  document.querySelectorAll('.cfg-form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var section = form.dataset.section;
+      var payload = { section: section };
+      new FormData(form).forEach(function (v, k) {
+        if (k === 'ai_enabled') { payload[k] = form.querySelector('#ai_enabled').checked; }
+        else { payload[k] = v; }
+      });
+      fetch('/api/config/save/', {
+        method: 'POST', headers: headers(), body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) showAlert('Pengaturan ' + section + ' tersimpan.', 'success');
+        else showAlert(d.error || 'Gagal menyimpan.', 'error');
+      }).catch(function () { showAlert('Gagal menyimpan.', 'error'); });
+    });
+  });
+
+  // Test koneksi
+  document.querySelectorAll('.test-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var section = btn.dataset.section;
+      setStatus(section, 'idle', 'menguji…');
+      fetch('/api/config/test/?section=' + encodeURIComponent(section), { headers: headers() })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          setStatus(section, d.status, d.detail || '');
+        }).catch(function () { setStatus(section, 'critical', 'gagal'); });
+    });
+  });
+
+  // Collapsible cards: sembunyikan body, tampilkan saat header di-klik
+  document.querySelectorAll('.cfg-toggle').forEach(function (hdr) {
+    hdr.addEventListener('click', function (e) {
+      var card = hdr.closest('.card--collapsible');
+      if (card) card.classList.toggle('is-collapsed');
+    });
+  });
+  // semua card ter-collapse secara default
+  document.querySelectorAll('.card--collapsible').forEach(function (c) {
+    c.classList.add('is-collapsed');
+  });
+
+  // Cek status awal saat halaman dibuka
+  ['sqlite', 'postgres', 'redis', 'ai'].forEach(function (s) {
+    setStatus(s, 'idle', 'belum dicek');
+  });
+})();
+</script>
+{% endblock %}
