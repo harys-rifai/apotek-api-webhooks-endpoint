@@ -10,9 +10,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
-from .models import APIEndpoint, APIRequestLog, WebhookEvent, Alert, AiInsight, NodeLayout
+from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
+                      AiInsight, NodeLayout, AIConfig, AIChatLog)
 from .services import call_api
 from .ai_insight import generate_ai_insight
+from .ai_chat import call_ai_chat
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1341,6 +1343,126 @@ def api_ai_insight(request):
         "metrics": row.metrics,
         "created_at": row.created_at.isoformat(),
     })
+
+
+# ── AI Chatbot (mirip ApotekApps) ───────────────────────────────────────────────
+
+def _build_chat_messages(user_msg, history, system_prompt):
+    msgs = [{"role": "system", "content": system_prompt}]
+    for h in history or []:
+        role = h.get("role")
+        content = h.get("content")
+        if role in ("user", "assistant") and content:
+            msgs.append({"role": role, "content": content})
+    msgs.append({"role": "user", "content": user_msg})
+    return msgs
+
+
+@login_required
+@require_POST
+def api_ai_chat(request):
+    """Chat dengan AI router (OpenAI-compatible).
+
+    Body JSON: {message, history?:[{role,content}], session_id?, source?}.
+    Return: {reply, model, usage} atau {error}.
+    """
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"error": "Payload JSON tidak valid."}, status=400)
+
+    message = (payload.get("message") or "").strip()
+    if not message:
+        return JsonResponse({"error": "Pesan kosong."}, status=400)
+
+    cfg = AIConfig.get_active()
+    if not cfg.enabled or not cfg.api_key or not cfg.base_url:
+        return JsonResponse(
+            {"error": "AI belum dikonfigurasi. Buka System Status untuk mengatur AI."},
+            status=400,
+        )
+
+    history = payload.get("history") or []
+    session_id = (payload.get("session_id") or "").strip()
+    source = (payload.get("source") or "chatbot_widget").strip()
+    messages = _build_chat_messages(message, history, cfg.system_prompt)
+
+    try:
+        reply, usage = call_ai_chat(messages, config=cfg, temperature=0.4)
+    except RuntimeError as e:
+        return JsonResponse({"error": str(e)}, status=502)
+
+    AIChatLog.objects.create(
+        user=request.user if request.user.is_authenticated else None,
+        chat_type=AIChatLog.TYPE_CHAT,
+        role="user", content=message,
+        session_id=session_id, source=source, model=usage.get("model", ""),
+    )
+    AIChatLog.objects.create(
+        user=request.user if request.user.is_authenticated else None,
+        chat_type=AIChatLog.TYPE_CHAT,
+        role="assistant", content=reply,
+        session_id=session_id, source=source,
+        model=usage.get("model", ""),
+        prompt_tokens=usage.get("prompt_tokens", 0),
+        completion_tokens=usage.get("completion_tokens", 0),
+    )
+    return JsonResponse({
+        "reply": reply,
+        "model": usage.get("model", ""),
+        "usage": usage,
+    })
+
+
+@login_required
+def api_ai_chat_history(request):
+    """Riwayat chat per session_id (terbaru duluan, dikembalikan urut naik)."""
+    session_id = request.GET.get("session_id", "").strip()
+    chat_type = request.GET.get("chat_type", "").strip()
+    qs = AIChatLog.objects.all()
+    if session_id:
+        qs = qs.filter(session_id=session_id)
+    if chat_type:
+        qs = qs.filter(chat_type=chat_type)
+    rows = list(qs.order_by("created_at")[:100])
+    items = [{"role": r.role, "content": r.content, "model": r.model,
+              "created_at": r.created_at.isoformat()} for r in rows]
+    return JsonResponse({"items": items, "count": len(items)})
+
+
+@login_required
+def api_ai_config(request):
+    """Baca / perbarui konfigurasi AI (khusus staff/admin)."""
+    if not (request.user.is_superuser or request.user.is_staff):
+        return JsonResponse({"error": "Forbidden"}, status=403)
+    cfg = AIConfig.get_active()
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body or "{}")
+        except Exception:
+            return JsonResponse({"error": "Payload JSON tidak valid."}, status=400)
+        for fld in ("base_url", "model", "system_prompt"):
+            if fld in data:
+                setattr(cfg, fld, data[fld])
+        if "api_key" in data and data["api_key"]:
+            cfg.api_key = data["api_key"]
+        if "enabled" in data:
+            cfg.enabled = bool(data["enabled"])
+        cfg.save()
+        return JsonResponse({"ok": True, "config": _ai_config_public(cfg)})
+    return JsonResponse({"config": _ai_config_public(cfg)})
+
+
+def _ai_config_public(cfg):
+    return {
+        "enabled": cfg.enabled,
+        "base_url": cfg.base_url,
+        "model": cfg.model,
+        "api_key_set": bool(cfg.api_key),
+        "api_key_masked": cfg.mask_key(),
+        "system_prompt": cfg.system_prompt,
+        "updated_at": cfg.updated_at.isoformat() if cfg.updated_at else None,
+    }
 
 
 @login_required

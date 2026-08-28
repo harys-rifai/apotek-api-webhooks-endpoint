@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -193,3 +194,88 @@ class WebhookEvent(models.Model):
 
     def __str__(self):
         return f"{self.event_type} [{self.status}] @ {self.received_at:%Y-%m-%d %H:%M}"
+
+
+class AIConfig(models.Model):
+    """Configuration for the OpenAI-compatible AI router used by the chatbot.
+
+    Mirip dengan ApotekApps: satu baris aktif, menyimpan base_url router
+    (mis. LiteLLM / OpenAI-compatible), api_key, dan model. Chatbot non-aktif
+    bila ``enabled=False`` atau kredensial kosong.
+    """
+
+    api_key = models.CharField(max_length=255, blank=True, default="")
+    base_url = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text="Base URL router AI (OpenAI-compatible), mis. http://localhost:20128/v1",
+    )
+    model = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="Nama router / model (mis. gpt-4o, atau nama router LiteLLM).",
+    )
+    enabled = models.BooleanField(default=False)
+    system_prompt = models.TextField(
+        blank=True, default=(
+            "You are the AI assistant for 'OrchestrationApps', a monitoring "
+            "dashboard for the ApotekApps pharmacy backend (API, database, redis, "
+            "nginx, webhooks). Answer in the user's language. Help with using the "
+            "dashboard, interpreting metrics, and troubleshooting incidents."
+        ),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "AI Config"
+        verbose_name_plural = "AI Config"
+
+    def __str__(self):
+        return f"AIConfig(enabled={self.enabled}, model={self.model or '-'})"
+
+    @classmethod
+    def get_active(cls):
+        obj = cls.objects.first()
+        if not obj:
+            obj = cls.objects.create()
+        return obj
+
+    def mask_key(self):
+        if not self.api_key:
+            return ""
+        k = self.api_key
+        if len(k) <= 8:
+            return "****" + k[-2:]
+        return k[:6] + "****" + k[-4:]
+
+
+class AIChatLog(models.Model):
+    """Log interaksi dengan AI chatbot Monitor."""
+
+    TYPE_CHAT = "chat"
+    TYPE_ANALYSIS = "analysis"
+    TYPE_CHOICES = [
+        (TYPE_CHAT, "Chatbot"),
+        (TYPE_ANALYSIS, "Analisis"),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="monitor_ai_chat_logs",
+    )
+    chat_type = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default=TYPE_CHAT)
+    role = models.CharField(max_length=20, default="user")  # user / assistant
+    content = models.TextField()
+    session_id = models.CharField(max_length=80, blank=True, default="")
+    source = models.CharField(max_length=40, blank=True, default="chatbot_widget")
+    model = models.CharField(max_length=100, blank=True, default="")
+    prompt_tokens = models.PositiveIntegerField(default=0)
+    completion_tokens = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "AI Chat Log"
+        verbose_name_plural = "AI Chat Logs"
+
+    def __str__(self):
+        return f"[{self.chat_type}] {self.role}: {self.content[:40]}"

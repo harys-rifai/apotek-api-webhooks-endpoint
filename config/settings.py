@@ -97,6 +97,12 @@ LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 
+# Auth: local Django users + login with ApotekApps credentials
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "apps.accounts.backends.ApotekAppsBackend",
+]
+
 # ApotekApps API config
 APOTEK_API_BASE_URL = config("APOTEK_API_BASE_URL", default="http://127.0.0.1:8000/api")
 APOTEK_ADMIN_USERNAME = config("APOTEK_ADMIN_USERNAME", default="admin")

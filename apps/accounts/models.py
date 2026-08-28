@@ -39,11 +39,29 @@ class MonitorProfile(models.Model):
         help_text="ID user di ApotekApps (jika disinkron).",
     )
     synced_at = models.DateTimeField(null=True, blank=True)
+    apotek_access = models.TextField(blank=True, default="")
+    apotek_refresh = models.TextField(blank=True, default="")
+    apotek_token_exp = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Monitor Profile"
         verbose_name_plural = "Monitor Profiles"
+
+    def set_token(self, access, refresh=None, ttl=86400):
+        """Simpan JWT ApotekApps (cached, bukan password lokal)."""
+        import time
+        self.apotek_access = access or ""
+        if refresh:
+            self.apotek_refresh = refresh
+        self.apotek_token_exp = time.time() + (ttl or 86400)
+        self.save()
+
+    def get_access_token(self):
+        import time
+        if self.apotek_access and time.time() < self.apotek_token_exp - 30:
+            return self.apotek_access
+        return None
 
     def __str__(self):
         return f"{self.user.username} ({self.get_source_display()})"
