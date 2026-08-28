@@ -114,6 +114,41 @@
   transform: translateX(-50%) translateY(0) scale(1);
 }
 
+/* ── Light theme: dock readability fixes ───────────────────── */
+[data-theme="light"] .dock {
+  background: rgba(255, 255, 255, .82);
+  border: 1px solid rgba(0, 0, 0, .1);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .14),
+              inset 0 1px 0 rgba(255, 255, 255, .6),
+              inset 0 -1px 0 rgba(0, 0, 0, .05);
+}
+[data-theme="light"] .dock__tile {
+  color: #2a2a45;
+  background: rgba(0, 0, 0, .04);
+  border: 1px solid rgba(0, 0, 0, .08);
+}
+[data-theme="light"] .dock__item:hover .dock__tile,
+[data-theme="light"] .dock__item.active .dock__tile {
+  color: var(--neon-cyan, #0088cc);
+  background: var(--neon-cyan-dim, rgba(0, 136, 204, .12));
+  border-color: rgba(0, 136, 204, .5);
+  box-shadow: 0 0 16px var(--neon-cyan-glow, rgba(0, 136, 204, .35));
+}
+[data-theme="light"] .dock__item--danger:hover .dock__tile {
+  color: var(--neon-red, #cc2255);
+  background: var(--neon-red-dim, rgba(204, 34, 85, .12));
+  border-color: rgba(204, 34, 85, .5);
+  box-shadow: 0 0 16px rgba(204, 34, 85, .3);
+}
+[data-theme="light"] .dock__sep {
+  background: rgba(0, 0, 0, .14);
+}
+[data-theme="light"] .dock__item::after {
+  background: rgba(20, 20, 43, .96);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .18);
+}
+
 @media (max-width: 620px) {
   .dock { gap: 0; padding: 6px 8px; bottom: 8px; }
   .dock__item { width: 52px; height: 52px; }
