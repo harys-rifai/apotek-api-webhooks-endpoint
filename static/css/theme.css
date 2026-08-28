@@ -79,17 +79,17 @@
 
 /* === NEON WHITE MODE === */
 [data-theme="light"] {
-    --bg-primary: #f4f5f9;
+    --bg-primary: #eef0f5;
     --bg-secondary: #ffffff;
     --bg-card: #ffffff;
-    --bg-card-hover: #f8f9fc;
-    --bg-input: #f0f1f5;
+    --bg-card-hover: #f4f6fb;
+    --bg-input: #f0f2f7;
     --bg-sidebar: #ffffff;
-    --bg-topbar: rgba(255, 255, 255, 0.88);
+    --bg-topbar: rgba(255, 255, 255, 0.9);
 
-    --text-primary: #1a1a2e;
-    --text-secondary: #5a5a72;
-    --text-muted: #9090a8;
+    --text-primary: #14142b;
+    --text-secondary: #3a3a52;
+    --text-muted: #63637a;
 
     --neon-cyan: #0088cc;
     --neon-cyan-dim: rgba(0, 136, 204, 0.1);
@@ -114,26 +114,26 @@
     --shadow-neon: 0 0 15px rgba(0, 136, 204, 0.1);
 
     /* === Topology / Smartscape specific (light) === */
-    --color-text: #1a1a2e;
-    --color-muted: #5a5a72;
-    --color-border: rgba(0, 0, 0, 0.08);
-    --bg-canvas: #eef1f7;
-    --node-fill: rgba(255, 255, 255, 0.96);
-    --node-stroke: rgba(0, 136, 204, 0.35);
-    --node-title: #1a1a2e;
-    --node-tech: #5a5a72;
+    --color-text: #14142b;
+    --color-muted: #63637a;
+    --color-border: rgba(0, 0, 0, 0.1);
+    --bg-canvas: #e9ecf3;
+    --node-fill: #f3f5fa;
+    --node-stroke: rgba(0, 114, 184, 0.45);
+    --node-title: #14142b;
+    --node-tech: #3a3a52;
     --tooltip-bg: #ffffff;
-    --tooltip-text: #1a1a2e;
-    --feed-title: #1a1a2e;
-    --feed-accent: #3a3a52;
-    --ns-val: #1a1a2e;
-    --ai-value: #3a3a52;
-    --ai-head: #7722bb;
-    --db-name: #1a1a2e;
-    --db-sub: #3a3a52;
-    --icon-color: #5a5a72;
-    --grid-line: rgba(0, 0, 0, 0.05);
-    --grid-major: rgba(0, 0, 0, 0.09);
+    --tooltip-text: #14142b;
+    --feed-title: #14142b;
+    --feed-accent: #2a2a45;
+    --ns-val: #14142b;
+    --ai-value: #2a2a45;
+    --ai-head: #6a1fb0;
+    --db-name: #14142b;
+    --db-sub: #2a2a45;
+    --icon-color: #3a3a52;
+    --grid-line: rgba(0, 0, 0, 0.06);
+    --grid-major: rgba(0, 0, 0, 0.11);
 }
 
 /* ==========================================
@@ -693,6 +693,21 @@ select.form-control {
     color: var(--text-muted);
     font-size: 0.85rem;
     margin-top: 4px;
+}
+
+/* ==========================================
+   NEON WHITE MODE — page-specific overrides
+   ========================================== */
+[data-theme="light"] .login-page::before,
+[data-theme="light"] .login-page::after {
+    opacity: 0.12;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.18);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--neon-cyan);
 }
 
 /* ==========================================

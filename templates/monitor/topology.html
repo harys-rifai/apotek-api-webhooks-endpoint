@@ -239,29 +239,86 @@
 
   /* ===== NEON WHITE MODE — topology readability fixes ===== */
   [data-theme="light"] .topo-split #topoWrap {
-    background: #f4f6fb;
+    background: #ffffff;
   }
   /* clean, legible grid on light bg (not a harsh checkerboard) */
   [data-theme="light"] #topoSvg .grid { stroke: rgba(20,40,80,.08); }
   [data-theme="light"] #topoSvg .grid-major { stroke: rgba(20,40,80,.14); }
-  /* solid white tiles with a clear border + soft shadow for separation */
+  /* solid tiles with a subtle off-white fill + clear border + soft shadow
+     so they stay separated from the pure-white background */
   [data-theme="light"] .node-base {
-    fill: #ffffff;
-    stroke: rgba(0,0,0,.18);
-    filter: drop-shadow(0 3px 8px rgba(20,40,80,.12));
+    fill: #eef2f8;
+    stroke: rgba(0,0,0,.22);
+    filter: drop-shadow(0 3px 8px rgba(20,40,80,.18));
   }
   [data-theme="light"] .node-title { fill: #14142b; }
   [data-theme="light"] .node-tech  { fill: #4a4a63; }
   [data-theme="light"] .node-metric { fill: #2a2a45; }
   [data-theme="light"] .card-corner-title {
-    background: rgba(255,255,255,.9);
-    border-color: rgba(0,0,0,.15);
+    background: rgba(238,242,248,.95);
+    border-color: rgba(0,0,0,.22);
     color: #14142b;
   }
   [data-theme="light"] .card-corner-title i { color: var(--neon-cyan,#0088cc); }
   [data-theme="light"] .node-tooltip {
     box-shadow: 0 6px 20px rgba(0,0,0,.18);
-  }</style>
+  }
+  /* AI insight panel + items — readable on white (the dark rgba() tints vanish) */
+  [data-theme="light"] .ai-insight {
+    background: linear-gradient(160deg, rgba(124,92,255,.10), rgba(0,114,184,.05));
+    border-color: rgba(124,92,255,.45);
+  }
+  [data-theme="light"] .ai-insight__head { color: #6a1fb0; }
+  [data-theme="light"] .ai-insight__head i { color: #7a2fcf; }
+  [data-theme="light"] .ai-insight__status { background: rgba(0,0,0,.05); }
+  [data-theme="light"] .ai-insight__status.live { color: #00a865; background: rgba(0,168,101,.14); }
+  [data-theme="light"] .ai-insight__status.thinking { color: #b8860b; background: rgba(184,134,11,.14); }
+  [data-theme="light"] .ai-item { background: rgba(0,0,0,.025); border-left-color: rgba(124,92,255,.7); }
+  [data-theme="light"] .ai-item__label,
+  [data-theme="light"] .ai-item__icon { color: #7a2fcf; }
+  [data-theme="light"] .ai-item__value { color: #2a2a45; }
+  [data-theme="light"] .ai-item__value code { background: rgba(0,0,0,.06); color: #6a1fb0; }
+  [data-theme="light"] .ai-item--info .ai-item__label,
+  [data-theme="light"] .ai-item--info .ai-item__icon { color: #63637a; }
+  [data-theme="light"] .ai-item--info { border-left-color: #63637a; }
+  [data-theme="light"] .ai-item--success .ai-item__label,
+  [data-theme="light"] .ai-item--success .ai-item__icon { color: #00a865; }
+  [data-theme="light"] .ai-item--success { border-left-color: #00a865; }
+  [data-theme="light"] .ai-item--warning .ai-item__label,
+  [data-theme="light"] .ai-item--warning .ai-item__icon { color: #b8860b; }
+  [data-theme="light"] .ai-item--warning { border-left-color: #b8860b; }
+  [data-theme="light"] .ai-item--critical .ai-item__label,
+  [data-theme="light"] .ai-item--critical .ai-item__icon { color: #d6204a; }
+  [data-theme="light"] .ai-item--critical { border-left-color: #d6204a; background: rgba(214,32,74,.10); }
+  /* live network feed states on white */
+  [data-theme="light"] .net-feed__state { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.1); }
+  [data-theme="light"] .net-feed__state.live { color: #00a865; }
+  [data-theme="light"] .net-feed__state.off { color: #d6204a; }
+  [data-theme="light"] .net-feed__state.live::before { animation: pulseDotLight 1.6s infinite; }
+  @keyframes pulseDotLight {
+    0% { box-shadow: 0 0 0 0 rgba(0,168,101,.5); }
+    70% { box-shadow: 0 0 0 6px rgba(0,168,101,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,168,101,0); }
+  }
+  [data-theme="light"] .ns-stat { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.1); }
+  [data-theme="light"] .db-size__row { border-bottom-color: rgba(0,0,0,.1); }
+  [data-theme="light"] .db-size__list { border-top-color: rgba(0,0,0,.1); }
+  [data-theme="light"] .db-size__btn { border-color: rgba(0,0,0,.12); }
+  [data-theme="light"] .db-size__btn:hover { color: var(--neon-cyan,#0088cc); border-color: var(--neon-cyan,#0088cc); }
+  [data-theme="light"] .legend .item { color: #3a3a52; }
+  [data-theme="light"] .net-feed__title { color: #14142b; }
+  [data-theme="light"] .net-feed__title i { color: var(--neon-cyan,#0088cc); }
+  [data-theme="light"] .net-feed__subhead { color: #63637a; }
+  [data-theme="light"] .net-feed__subhead i { color: var(--neon-cyan,#0088cc); }
+
+  /* legend + hint text legibility on white */
+  [data-theme="light"] .topo-hint { color: #3a3a52 !important; }
+  [data-theme="light"] .legend { color: #3a3a52; }
+  /* remove the grid-pattern background on white (it reads as an ugly B/W checker) */
+  [data-theme="light"] #topoSvg #bgRect { fill: none; }
+  [data-theme="light"] #topoSvg .grid,
+  [data-theme="light"] #topoSvg .grid-major { display: none; }
+</style>
 {% endblock %}
 
 {% block content %}
