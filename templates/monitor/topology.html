@@ -694,6 +694,7 @@
       audit:"fa-solid fa-magnifying-glass", common:"fa-solid fa-cube",
     };
     let ic = ICON[n.id];
+    if (n.id === "pg_secondary") ic = { ...ICON.pg };
     if (!ic && n.id.startsWith("svc_")) ic = { cls: MOD_ICON[n.id.slice(4)] || "fa-solid fa-cube", color: P.runtime };
     if (!ic) {
       if (n.kind === "database") ic = { cls: "fa-solid fa-database", color: P.database };

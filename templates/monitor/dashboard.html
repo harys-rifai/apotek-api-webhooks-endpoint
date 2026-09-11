@@ -2,217 +2,243 @@
 {% block title %}Dashboard — ApotekMonitor{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
+{% block extra_head %}
+<style>
+  .dash .kpi-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .dash .kpi-card { padding: 12px 14px; gap: 10px; }
+  .dash .kpi-card__icon { width: 34px; height: 34px; font-size: 1rem; border-radius: 10px; }
+  .dash .kpi-card__label { font-size: .66rem; letter-spacing: .4px; }
+  .dash .kpi-card__value { font-size: 1.15rem; }
+  .dash .chart-row { grid-template-columns: 1.15fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .dash .bottom-row { grid-template-columns: 1.1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .dash .card { border-radius: 10px; }
+  .dash .card__header { padding: 10px 12px; }
+  .dash .card__title { font-size: .82rem; }
+  .dash .card__body { padding: 10px 12px; }
+  .dash .table--compact thead th,
+  .dash .table--compact tbody td { padding: 6px 10px; font-size: .78rem; }
+  .dash .card__link { font-size: .72rem; }
+  .dash .select-sm { font-size: .72rem; padding: 4px 8px; }
+  .dash .btn-outline { font-size: .72rem; padding: 4px 10px; }
+  @media (max-width: 980px) {
+    .dash .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .dash .chart-row { grid-template-columns: 1fr; }
+    .dash .bottom-row { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-
-<!-- KPI Cards -->
-<div class="kpi-grid">
-  <div class="kpi-card kpi-card--total">
-    <div class="kpi-card__icon"><i class="fa-solid fa-satellite-dish"></i></div>
-    <div class="kpi-card__body">
-      <span class="kpi-card__label">Total Requests</span>
-      <span class="kpi-card__value">{{ stats.total }}</span>
-    </div>
-  </div>
-  <div class="kpi-card kpi-card--success">
-    <div class="kpi-card__icon"><i class="fa-solid fa-circle-check"></i></div>
-    <div class="kpi-card__body">
-      <span class="kpi-card__label">Success</span>
-      <span class="kpi-card__value">{{ stats.success }}</span>
-    </div>
-  </div>
-  <div class="kpi-card kpi-card--fail">
-    <div class="kpi-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-    <div class="kpi-card__body">
-      <span class="kpi-card__label">Fail (4xx)</span>
-      <span class="kpi-card__value">{{ stats.fail }}</span>
-    </div>
-  </div>
-  <div class="kpi-card kpi-card--error">
-    <div class="kpi-card__icon"><i class="fa-solid fa-fire"></i></div>
-    <div class="kpi-card__body">
-      <span class="kpi-card__label">Error (5xx)</span>
-      <span class="kpi-card__value">{{ stats.error }}</span>
-    </div>
-  </div>
-  <div class="kpi-card kpi-card--rate">
-    <div class="kpi-card__icon"><i class="fa-solid fa-chart-line"></i></div>
-    <div class="kpi-card__body">
-      <span class="kpi-card__label">Success Rate</span>
-      <span class="kpi-card__value">{{ stats.success_rate }}%</span>
-    </div>
-  </div>
-  <div class="kpi-card kpi-card--latency">
-    <div class="kpi-card__icon"><i class="fa-solid fa-stopwatch"></i></div>
-    <div class="kpi-card__body">
-      <span class="kpi-card__label">Avg Latency</span>
-      <span class="kpi-card__value">{{ stats.avg_ms }} ms</span>
-    </div>
-  </div>
-</div>
-
-<!-- Charts Row — graph & donut diperkecil -->
-<div class="chart-row">
-  <div class="card">
-    <div class="card__header">
-      <h2 class="card__title"><i class="fa-solid fa-chart-bar" style="color:var(--neon-cyan)"></i> Request Volume</h2>
-      <div class="card__actions">
-        <select id="chartDaysSelect" class="select-sm">
-          <option value="7">7 hari</option>
-          <option value="14">14 hari</option>
-          <option value="30">30 hari</option>
-        </select>
+<div class="dash">
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-card--total">
+      <div class="kpi-card__icon"><i class="fa-solid fa-satellite-dish"></i></div>
+      <div class="kpi-card__body">
+        <span class="kpi-card__label">Total Requests</span>
+        <span class="kpi-card__value">{{ stats.total }}</span>
       </div>
     </div>
-    <div class="card__body" style="padding:12px 16px">
-      <canvas id="volumeChart" style="max-height:160px"></canvas>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card__header">
-      <h2 class="card__title"><i class="fa-solid fa-chart-pie" style="color:var(--neon-magenta)"></i> Status</h2>
-    </div>
-    <div class="card__body" style="padding:12px 16px;display:flex;justify-content:center;align-items:center">
-      <canvas id="statusChart" style="max-height:160px;max-width:160px"></canvas>
-    </div>
-  </div>
-</div>
-
-<!-- Latency Chart diperkecil -->
-<div class="card" style="margin-bottom:16px">
-  <div class="card__header">
-    <h2 class="card__title"><i class="fa-solid fa-wave-square" style="color:var(--neon-purple)"></i> Avg Latency (ms)</h2>
-  </div>
-  <div class="card__body" style="padding:12px 16px">
-    <canvas id="latencyChart" style="max-height:100px"></canvas>
-  </div>
-</div>
-
-<!-- Bottom Row tables -->
-<div class="bottom-row">
-  <!-- Top Endpoints -->
-  <div class="card">
-    <div class="card__header">
-      <h2 class="card__title">Top Endpoints</h2>
-      <a href="{% url 'endpoint_list' %}" class="card__link">Lihat semua →</a>
-    </div>
-    <div class="card__body" style="padding:0">
-      <div class="table-wrapper">
-        <table class="table table--compact" id="topEpTable">
-          <thead><tr>
-            <th>Method</th><th>Path</th><th>Total</th>
-            <th>Success</th><th>Fail</th><th>Rate</th>
-          </tr></thead>
-          <tbody id="endpointTableBody">
-            <tr><td colspan="6" class="text-center text-muted" style="padding:1.5rem">Loading…</td></tr>
-          </tbody>
-        </table>
+    <div class="kpi-card kpi-card--success">
+      <div class="kpi-card__icon"><i class="fa-solid fa-circle-check"></i></div>
+      <div class="kpi-card__body">
+        <span class="kpi-card__label">Success</span>
+        <span class="kpi-card__value">{{ stats.success }}</span>
       </div>
-      <div class="pagination-bar" id="topEpPager" style="display:none">
-        <span class="page-info" id="topEpInfo"></span>
-        <div class="page-actions">
-          <span class="page-size-label">Rows:</span>
-          <select id="topEpPageSize" class="select-sm">
-            <option value="5" selected>5</option>
-            <option value="10">10</option>
-            <option value="15">15</option>
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
+    </div>
+    <div class="kpi-card kpi-card--fail">
+      <div class="kpi-card__icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div class="kpi-card__body">
+        <span class="kpi-card__label">Fail (4xx)</span>
+        <span class="kpi-card__value">{{ stats.fail }}</span>
+      </div>
+    </div>
+    <div class="kpi-card kpi-card--error">
+      <div class="kpi-card__icon"><i class="fa-solid fa-fire"></i></div>
+      <div class="kpi-card__body">
+        <span class="kpi-card__label">Error (5xx)</span>
+        <span class="kpi-card__value">{{ stats.error }}</span>
+      </div>
+    </div>
+    <div class="kpi-card kpi-card--rate">
+      <div class="kpi-card__icon"><i class="fa-solid fa-chart-line"></i></div>
+      <div class="kpi-card__body">
+        <span class="kpi-card__label">Success Rate</span>
+        <span class="kpi-card__value">{{ stats.success_rate }}%</span>
+      </div>
+    </div>
+    <div class="kpi-card kpi-card--latency">
+      <div class="kpi-card__icon"><i class="fa-solid fa-stopwatch"></i></div>
+      <div class="kpi-card__body">
+        <span class="kpi-card__label">Avg Latency</span>
+        <span class="kpi-card__value">{{ stats.avg_ms }} ms</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="chart-row">
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title"><i class="fa-solid fa-chart-bar" style="color:var(--neon-cyan)"></i> Request Volume</h2>
+        <div class="card__actions">
+          <select id="chartDaysSelect" class="select-sm">
+            <option value="7">7 hari</option>
+            <option value="14">14 hari</option>
+            <option value="30">30 hari</option>
           </select>
-          <button class="btn btn-outline btn-sm" id="topEpPrev">‹ Prev</button>
-          <button class="btn btn-outline btn-sm" id="topEpNext">Next ›</button>
+        </div>
+      </div>
+      <div class="card__body" style="padding:10px 12px">
+        <canvas id="volumeChart" style="max-height:150px"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title"><i class="fa-solid fa-chart-pie" style="color:var(--neon-magenta)"></i> Status</h2>
+      </div>
+      <div class="card__body" style="padding:10px 12px;display:flex;justify-content:center;align-items:center">
+        <canvas id="statusChart" style="max-height:150px;max-width:150px"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Latency Chart -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="card__header">
+      <h2 class="card__title"><i class="fa-solid fa-wave-square" style="color:var(--neon-purple)"></i> Avg Latency (ms)</h2>
+    </div>
+    <div class="card__body" style="padding:10px 12px">
+      <canvas id="latencyChart" style="max-height:90px"></canvas>
+    </div>
+  </div>
+
+  <!-- Bottom Row tables -->
+  <div class="bottom-row">
+    <!-- Top Endpoints -->
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title">Top Endpoints</h2>
+        <a href="{% url 'endpoint_list' %}" class="card__link">Lihat semua →</a>
+      </div>
+      <div class="card__body" style="padding:0">
+        <div class="table-wrapper">
+          <table class="table table--compact" id="topEpTable">
+            <thead><tr>
+              <th>Method</th><th>Path</th><th>Total</th>
+              <th>Success</th><th>Fail</th><th>Rate</th>
+            </tr></thead>
+            <tbody id="endpointTableBody">
+              <tr><td colspan="6" class="text-center text-muted" style="padding:1.2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="topEpPager" style="display:none">
+          <span class="page-info" id="topEpInfo"></span>
+          <div class="page-actions">
+            <span class="page-size-label">Rows:</span>
+            <select id="topEpPageSize" class="select-sm">
+              <option value="5" selected>5</option>
+              <option value="10">10</option>
+              <option value="15">15</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <button class="btn btn-outline btn-sm" id="topEpPrev">‹ Prev</button>
+            <button class="btn btn-outline btn-sm" id="topEpNext">Next ›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slowest Endpoints -->
+    <div class="card">
+      <div class="card__header">
+        <h2 class="card__title">Slowest Endpoints</h2>
+      </div>
+      <div class="card__body" style="padding:0">
+        <div class="table-wrapper">
+          <table class="table table--compact">
+            <thead><tr><th>Method</th><th>Path</th><th>Avg ms</th><th>Calls</th></tr></thead>
+            <tbody id="slowTbody">
+              {% for ep in slow_endpoints %}
+              <tr>
+                <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
+                <td class="text-mono text-sm">{{ ep.path }}</td>
+                <td class="{% if ep.avg_ms > 2000 %}text-danger{% elif ep.avg_ms > 1000 %}text-warn{% endif %}">
+                  {{ ep.avg_ms|floatformat:0 }} ms
+                </td>
+                <td>{{ ep.calls }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted" style="padding:1.2rem">Belum ada data</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Slowest Endpoints -->
+  <!-- Recent Logs -->
   <div class="card">
     <div class="card__header">
-      <h2 class="card__title">Slowest Endpoints</h2>
+      <h2 class="card__title">Recent Requests</h2>
+      <a href="{% url 'log_list' %}" class="card__link">Lihat semua →</a>
     </div>
     <div class="card__body" style="padding:0">
       <div class="table-wrapper">
         <table class="table table--compact">
-          <thead><tr><th>Method</th><th>Path</th><th>Avg ms</th><th>Calls</th></tr></thead>
-          <tbody id="slowTbody">
-            {% for ep in slow_endpoints %}
-            <tr>
-              <td><span class="badge badge--method-{{ ep.method|lower }}">{{ ep.method }}</span></td>
-              <td class="text-mono text-sm">{{ ep.path }}</td>
-              <td class="{% if ep.avg_ms > 2000 %}text-danger{% elif ep.avg_ms > 1000 %}text-warn{% endif %}">
-                {{ ep.avg_ms|floatformat:0 }} ms
+          <thead><tr>
+            <th>Waktu</th><th>Method</th><th>Path</th>
+            <th>Code</th><th>Status</th><th>Latency</th><th>Retry</th>
+          </tr></thead>
+          <tbody id="recentLogsTbody">
+            {% for log in recent_logs %}
+            <tr class="log-row">
+              <td class="text-muted" style="white-space:nowrap;font-size:.72rem">{{ log.created_at|date:"d/m H:i:s" }}</td>
+              <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
+              <td class="text-mono" style="font-size:.72rem">{{ log.path }}</td>
+              <td>
+                <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge-success{% elif log.status_code >= 400 and log.status_code < 500 %}badge-warning{% elif log.status_code %}badge-danger{% else %}badge-muted{% endif %}">
+                  {{ log.status_code|default:"—" }}
+                </span>
               </td>
-              <td>{{ ep.calls }}</td>
+              <td><span class="status-dot status-dot--{{ log.status }}"></span>{{ log.status }}</td>
+              <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}" style="white-space:nowrap">
+                {{ log.response_time_ms|floatformat:0|default:"—" }} ms
+              </td>
+              <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="4" class="text-center text-muted" style="padding:1.5rem">Belum ada data</td></tr>
+            <tr><td colspan="7" class="text-center text-muted" style="padding:1.5rem">
+              Belum ada log. Tambah endpoint lalu klik Ping.
+            </td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- Recent Logs dengan pagination -->
-<div class="card">
-  <div class="card__header">
-    <h2 class="card__title">Recent Requests</h2>
-    <a href="{% url 'log_list' %}" class="card__link">Lihat semua →</a>
-  </div>
-  <div class="card__body" style="padding:0">
-    <div class="table-wrapper">
-      <table class="table table--compact">
-        <thead><tr>
-          <th>Waktu</th><th>Method</th><th>Path</th>
-          <th>Code</th><th>Status</th><th>Latency</th><th>Retry</th>
-        </tr></thead>
-        <tbody id="recentLogsTbody">
-          {% for log in recent_logs %}
-          <tr class="log-row">
-            <td class="text-muted" style="white-space:nowrap;font-size:.78rem">{{ log.created_at|date:"d/m H:i:s" }}</td>
-            <td><span class="badge badge--method-{{ log.method|lower }}">{{ log.method }}</span></td>
-            <td class="text-mono" style="font-size:.78rem">{{ log.path }}</td>
-            <td>
-              <span class="badge {% if log.status_code >= 200 and log.status_code < 300 %}badge-success{% elif log.status_code >= 400 and log.status_code < 500 %}badge-warning{% elif log.status_code %}badge-danger{% else %}badge-muted{% endif %}">
-                {{ log.status_code|default:"—" }}
-              </span>
-            </td>
-            <td><span class="status-dot status-dot--{{ log.status }}"></span>{{ log.status }}</td>
-            <td class="{% if log.response_time_ms > 2000 %}text-danger{% elif log.response_time_ms > 1000 %}text-warn{% endif %}" style="white-space:nowrap">
-              {{ log.response_time_ms|floatformat:0|default:"—" }} ms
-            </td>
-            <td class="{% if log.attempt > 1 %}text-warn{% endif %}">{{ log.attempt }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">
-            Belum ada log. Tambah endpoint lalu klik Ping.
-          </td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="pagination-bar" id="recentLogsPager">
-      <span class="page-info" id="recentLogsInfo"></span>
-      <div class="page-actions">
-        <span class="page-size-label">Rows:</span>
-        <select id="recentLogsPageSize" class="select-sm">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="15">15</option>
-          <option value="25">25</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-        </select>
-        <button class="btn btn-outline btn-sm" id="recentLogsPrev">‹</button>
-        <button class="btn btn-outline btn-sm" id="recentLogsNext">›</button>
+      <div class="pagination-bar" id="recentLogsPager">
+        <span class="page-info" id="recentLogsInfo"></span>
+        <div class="page-actions">
+          <span class="page-size-label">Rows:</span>
+          <select id="recentLogsPageSize" class="select-sm">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="15">15</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button class="btn btn-outline btn-sm" id="recentLogsPrev">‹</button>
+          <button class="btn btn-outline btn-sm" id="recentLogsNext">›</button>
+        </div>
       </div>
     </div>
   </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -220,7 +246,6 @@
 const STATS_URL = "{% url 'api_stats_json' %}";
 let volumeChart, statusChart, latencyChart;
 
-// ── Chart.js neon colour palette ──
 Chart.defaults.color = "#9090a8";
 Chart.defaults.borderColor = "rgba(255,255,255,0.06)";
 
@@ -232,7 +257,6 @@ async function loadCharts(days = 7) {
   const labels   = daily.map(d => d.day);
   const nGreen   = "#00ff88", nYellow = "#ffcc00", nRed = "#ff3366", nCyan = "#00f0ff", nPurple = "#aa44ff";
 
-  // Bar chart
   if (volumeChart) volumeChart.destroy();
   volumeChart = new Chart(document.getElementById("volumeChart"), {
     type: "bar",
@@ -254,7 +278,6 @@ async function loadCharts(days = 7) {
     },
   });
 
-  // Donut
   if (statusChart) statusChart.destroy();
   statusChart = new Chart(document.getElementById("statusChart"), {
     type: "doughnut",
@@ -270,7 +293,6 @@ async function loadCharts(days = 7) {
     },
   });
 
-  // Latency line
   if (latencyChart) latencyChart.destroy();
   latencyChart = new Chart(document.getElementById("latencyChart"), {
     type: "line",
@@ -278,7 +300,7 @@ async function loadCharts(days = 7) {
       labels,
       datasets: [{ label: "Avg ms", data: daily.map(d => d.avg_ms),
         borderColor: nPurple, backgroundColor: "rgba(170,68,255,0.08)",
-        fill: true, tension: 0.4, pointRadius: 3 }],
+        fill: true, tension: 0.4, pointRadius: 2 }],
     },
     options: {
       responsive: true, maintainAspectRatio: true,
@@ -287,11 +309,9 @@ async function loadCharts(days = 7) {
     },
   });
 
-  // Top endpoint table — client pagination
   renderTopEpTable(perEp, 1);
 }
 
-// ── Top Endpoint pagination ──
 let _epData = [], _epPage = 1, _epPageSize = 5;
 function renderTopEpTable(data, page) {
   if (data) _epData = data;
@@ -305,21 +325,21 @@ function renderTopEpTable(data, page) {
   const pages  = Math.ceil(total / _epPageSize);
 
   if (total === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:1.5rem">Belum ada data</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding:1.2rem">Belum ada data</td></tr>';
     pager.style.display = "none"; return;
   }
 
   tbody.innerHTML = slice.map(e => `
     <tr>
       <td><span class="badge badge--method-${e.method.toLowerCase()}">${e.method}</span></td>
-      <td class="text-mono" style="font-size:.78rem">${e.path}</td>
+      <td class="text-mono" style="font-size:.72rem">${e.path}</td>
       <td>${e.total}</td>
       <td class="text-success">${e.success}</td>
       <td class="text-warn">${e.fail}</td>
       <td>
         <div class="rate-bar">
           <div class="rate-bar__fill" style="width:${e.success_rate}%;min-width:0"></div>
-          <span style="font-size:.75rem;white-space:nowrap">${e.success_rate}%</span>
+          <span style="font-size:.72rem;white-space:nowrap">${e.success_rate}%</span>
         </div>
       </td>
     </tr>`).join("");
@@ -334,7 +354,6 @@ document.getElementById("topEpPrev").addEventListener("click", () => renderTopEp
 document.getElementById("topEpNext").addEventListener("click", () => renderTopEpTable(null, _epPage + 1));
 document.getElementById("topEpPageSize").addEventListener("change", e => { _epPageSize = +e.target.value; _epPage = 1; renderTopEpTable(null, 1); });
 
-// ── Recent Logs pagination ──
 let _logsPage = 1, _logsPageSize = 10;
 const _allRows = () => document.querySelectorAll("#recentLogsTbody .log-row");
 
@@ -360,7 +379,6 @@ document.getElementById("recentLogsPageSize").addEventListener("change", e => {
   _logsPageSize = parseInt(e.target.value); _logsPage = 1; renderLogsPagination();
 });
 
-// ── Init ──
 document.getElementById("chartDaysSelect").addEventListener("change", e => loadCharts(e.target.value));
 loadCharts(7);
 renderLogsPagination();

@@ -372,18 +372,18 @@
 .kpi-card--rate    .kpi-card__icon { background: var(--neon-magenta-dim); color: var(--neon-purple); }
 .kpi-card--latency .kpi-card__icon { background: var(--neon-magenta-dim); color: var(--neon-magenta); }
 
-.kpi-card__body  { display: flex; flex-direction: column; gap: 4px; }
-.kpi-card__label { font-size: .7rem; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); font-weight: 600; }
-.kpi-card__value { font-size: 1.55rem; font-weight: 800; line-height: 1.1; }
+.kpi-card__body  { display: flex; flex-direction: column; gap: 2px; }
+.kpi-card__label { font-size: .65rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-weight: 600; }
+.kpi-card__value { font-size: 1.15rem; font-weight: 800; line-height: 1.1; }
 
 /* ── Chart layout ────────────────────────────────────────────── */
-.chart-row   { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 16px; }
-.bottom-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-row   { display: grid; grid-template-columns: 1.1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.bottom-row  { display: grid; grid-template-columns: 1.05fr 1fr; gap: 10px; }
 .chart-donut-wrap { display: flex; justify-content: center; align-items: center; }
 
 /* ── Table extras ────────────────────────────────────────────── */
 .table--compact thead th,
-.table--compact tbody td { padding: 8px 14px; }
+.table--compact tbody td { padding: 5px 10px; font-size: .78rem; }
 
 /* ── Badge extras ────────────────────────────────────────────── */
 .badge--method-get    { background: var(--neon-green-dim);   color: var(--neon-green); }

@@ -1080,31 +1080,41 @@ def _get_both_postgres_configs():
                "user": "postgres", "password": ""}
     secondary = {"host": "127.0.0.1", "port": 5008, "name": "apotek_pos",
                  "user": "postgres", "password": ""}
+    target = primary
     try:
         with open(apps_env, 'r') as f:
             lines = f.readlines()
-        
+
         for line in lines:
             line = line.strip()
-            if not line or line.startswith('#') or '=' not in line:
+            if not line:
+                continue
+            if line.startswith('#'):
+                marker = line.lower()
+                if 'secondary' in marker:
+                    target = secondary
+                elif 'primary' in marker:
+                    target = primary
+                continue
+            if '=' not in line:
                 continue
             key, value = line.split('=', 1)
             key = key.strip()
             value = value.strip()
-            
+
             if key == 'DB_HOST':
-                primary['host'] = value
+                target['host'] = value
             elif key == 'DB_PORT':
                 try:
-                    primary['port'] = int(value)
+                    target['port'] = int(value)
                 except ValueError:
                     pass
             elif key == 'DB_NAME':
-                primary['name'] = value
+                target['name'] = value
             elif key == 'DB_USER':
-                primary['user'] = value
+                target['user'] = value
             elif key == 'DB_PASSWORD':
-                primary['password'] = value
+                target['password'] = value
             elif key == 'STANDBY_DB_HOST':
                 secondary['host'] = value
             elif key == 'STANDBY_DB_PORT':
@@ -1843,11 +1853,10 @@ def api_topology_json(request):
     recent_all = APIRequestLog.objects.filter(created_at__gte=since)
     recent_total = recent_all.count()
     recent_fail = recent_all.filter(status__in=["fail", "error"]).count()
-    if db_status == "critical" or db_secondary_status == "critical":
+    db_critical_count = sum(status == "critical" for status in (db_status, db_secondary_status))
+    if db_critical_count == 2 or (recent_total and (recent_fail / recent_total) > 0.5):
         apps_status = "critical"
-    elif recent_total and (recent_fail / recent_total) > 0.5:
-        apps_status = "critical"
-    elif recent_total and (recent_fail / recent_total) > 0.2:
+    elif db_critical_count == 1 or (recent_total and (recent_fail / recent_total) > 0.2):
         apps_status = "warning"
     elif redis_status == "critical" or media_status == "critical":
         # Redis has a locmem fallback and media only affects uploads → degraded, not down
@@ -1857,7 +1866,7 @@ def api_topology_json(request):
     nodes.append({
         "id": "apps_api", "label": "ApotekApps REST API", "kind": "service",
         "tech": "Django + DRF :8000", "status": apps_status,
-        "detail": f"DB: {db_status} · Redis: {redis_status} · Media: {media_status}",
+        "detail": f"DB Primary: {db_status} · DB Secondary: {db_secondary_status} · Redis: {redis_status} · Media: {media_status}",
     })
     nodes.append({
         "id": "monitor", "label": "OrchestrationApps", "kind": "service",
@@ -1975,13 +1984,13 @@ def api_topology_json(request):
     # overall STATUS combines API availability with CORE infra health only
     # (DB, Redis, Media, Nginx, Python, System). Non-fatal channels like Email
     # are excluded so a missing SMTP server cannot flip the whole system critical.
-    core_infra = [db_status, redis_status, media_status, nginx_status,
+    core_infra = [db_status, db_secondary_status, redis_status, media_status, nginx_status,
                   python_status, system_status]
-    if db_status == "critical":
+    db_critical_count = sum(status == "critical" for status in (db_status, db_secondary_status))
+    other_core_critical = any(status == "critical" for status in core_infra if status not in (db_status, db_secondary_status))
+    if db_critical_count == 2 or other_core_critical or overall < 80:
         overall_status = "critical"
-    elif "critical" in core_infra or overall < 80:
-        overall_status = "critical"
-    elif "warning" in core_infra or overall < 95:
+    elif db_critical_count == 1 or "warning" in core_infra or overall < 95:
         overall_status = "warning"
     else:
         overall_status = "healthy"
