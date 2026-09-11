@@ -226,6 +226,12 @@ def topology_view(request):
 
 
 @login_required
+def db_maintenance_view(request):
+    context = {"active_menu": "db_maintenance"}
+    return render(request, "monitor/db_maintenance.html", context)
+
+
+@login_required
 def alerts_view(request):
     level = request.GET.get("level", "")
     qs = Alert.objects.all()
@@ -590,10 +596,12 @@ def api_activity_json(request):
 
 @login_required
 def api_db_sizes(request):
-    """Return sizes for every datastore: monitor SQLite, ApotekApps PostgreSQL,
+    """Return sizes for every datastore: monitor SQLite, ApotekApps PostgreSQL primary/secondary,
     and Redis. Used by the topology 'Storage & Database' panel."""
     sqlite_path = settings.DATABASES.get("default", {}).get("NAME")
-    pg = _postgres_size()
+    primary_cfg, secondary_cfg = _get_both_postgres_configs()
+    pg = _postgres_size(primary_cfg)
+    pg_secondary = _postgres_size(secondary_cfg)
     redis = _redis_size()
 
     sqlite_bytes = _sqlite_size(sqlite_path)
@@ -613,7 +621,7 @@ def api_db_sizes(request):
             "status": "healthy" if sqlite_bytes > 0 else "warning",
         },
         "postgres": {
-            "label": "PostgreSQL (ApotekApps)",
+            "label": "PostgreSQL Primary",
             "bytes": pg.get("bytes"),
             "human": _human_size(pg["bytes"]) if pg.get("bytes") is not None else "n/a",
             "tables": pg.get("tables"),
@@ -621,6 +629,16 @@ def api_db_sizes(request):
             "points": pg.get("points"),
             "status": pg.get("status", "unknown"),
             "detail": pg.get("detail", ""),
+        },
+        "postgres_secondary": {
+            "label": "PostgreSQL Secondary",
+            "bytes": pg_secondary.get("bytes"),
+            "human": _human_size(pg_secondary.get("bytes") or 0),
+            "tables": pg_secondary.get("tables"),
+            "members": pg_secondary.get("members"),
+            "points": pg_secondary.get("points"),
+            "status": pg_secondary.get("status", "unknown"),
+            "detail": pg_secondary.get("detail", ""),
         },
         "redis": {
             "label": "Redis Cache",
@@ -679,6 +697,158 @@ def api_db_vacuum(request):
         return JsonResponse({"ok": True, "detail": f"VACUUM FULL selesai · {name}@{host}:{port}"})
     except Exception as e:
         return JsonResponse({"ok": False, "error": f"VACUUM FULL gagal: {e}"}, status=500)
+
+
+@login_required
+@require_POST
+def api_db_vacuum_secondary(request):
+    """Jalankan VACUUM FULL pada PostgreSQL Secondary ApotekApps."""
+    import socket
+
+    _, secondary_cfg = _get_both_postgres_configs()
+    host = secondary_cfg["host"]
+    port = secondary_cfg["port"]
+    name = secondary_cfg["name"]
+    user = secondary_cfg["user"]
+    password = secondary_cfg["password"]
+
+    try:
+        import psycopg
+        _connect = lambda: psycopg.connect(
+            host=host, port=port, dbname=name, user=user,
+            password=password, connect_timeout=5, autocommit=True,
+        )
+    except ImportError:
+        try:
+            import psycopg2
+            _connect = lambda: psycopg2.connect(
+                host=host, port=port, dbname=name, user=user,
+                password=password, connect_timeout=5,
+            )
+        except ImportError:
+            return JsonResponse(
+                {"ok": False, "error": "no postgres driver (psycopg/psycopg2)"}, status=500)
+
+    try:
+        conn = _connect()
+        try:
+            conn.autocommit = True
+        except Exception:
+            pass
+        with conn.cursor() as cur:
+            cur.execute("VACUUM FULL")
+        conn.close()
+        return JsonResponse({"ok": True, "detail": f"VACUUM FULL selesai · {name}@{host}:{port}"})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"VACUUM FULL gagal: {e}"}, status=500)
+
+
+def _pg_maintenance(config, command):
+    """Run a maintenance SQL command on PostgreSQL with autocommit."""
+    host = config["host"]
+    port = config["port"]
+    name = config["name"]
+    user = config["user"]
+    password = config["password"]
+    try:
+        import psycopg
+        _connect = lambda: psycopg.connect(
+            host=host, port=port, dbname=name, user=user,
+            password=password, connect_timeout=5, autocommit=True,
+        )
+    except ImportError:
+        try:
+            import psycopg2
+            _connect = lambda: psycopg2.connect(
+                host=host, port=port, dbname=name, user=user,
+                password=password, connect_timeout=5,
+            )
+        except ImportError:
+            return JsonResponse(
+                {"ok": False, "error": "no postgres driver (psycopg/psycopg2)"}, status=500)
+    try:
+        conn = _connect()
+        try:
+            conn.autocommit = True
+        except Exception:
+            pass
+        with conn.cursor() as cur:
+            cur.execute(command)
+        conn.close()
+        return JsonResponse({"ok": True, "detail": f"{command} selesai · {name}@{host}:{port}"})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"{command} gagal: {e}"}, status=500)
+
+
+@login_required
+@require_POST
+def api_db_reindex(request, db="primary"):
+    """Jalankan REINDEX pada PostgreSQL."""
+    configs = _get_both_postgres_configs()
+    config = configs[0] if db == "primary" else configs[1]
+    return _pg_maintenance(config, "REINDEX DATABASE " + config["name"])
+
+
+@login_required
+@require_POST
+def api_db_analyze(request, db="primary"):
+    """Jalankan ANALYZE pada PostgreSQL."""
+    configs = _get_both_postgres_configs()
+    config = configs[0] if db == "primary" else configs[1]
+    return _pg_maintenance(config, "ANALYZE")
+
+
+@login_required
+@require_POST
+def api_db_vacuum_analyze(request, db="primary"):
+    """Jalankan VACUUM ANALYZE pada PostgreSQL."""
+    configs = _get_both_postgres_configs()
+    config = configs[0] if db == "primary" else configs[1]
+    return _pg_maintenance(config, "VACUUM ANALYZE")
+
+
+@login_required
+@require_POST
+def api_db_backup_pg(request, db="primary"):
+    """Backup PostgreSQL using pg_dump."""
+    import subprocess, tempfile, os
+    configs = _get_both_postgres_configs()
+    config = configs[0] if db == "primary" else configs[1]
+    host = config["host"]
+    port = config["port"]
+    name = config["name"]
+    user = config["user"]
+    password = config["password"]
+    env = os.environ.copy()
+    if password:
+        env["PGPASSWORD"] = password
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".sql")
+    try:
+        cmd = [
+            "pg_dump",
+            "-h", str(host),
+            "-p", str(port),
+            "-U", user,
+            "-d", name,
+            "-f", tmp.name,
+        ]
+        res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        if res.returncode != 0:
+            return JsonResponse({"ok": False, "error": res.stderr.strip() or "pg_dump failed"}, status=500)
+        size = os.path.getsize(tmp.name)
+        return JsonResponse({
+            "ok": True,
+            "detail": f"Backup selesai · {name}@{host}:{port}",
+            "bytes": size,
+            "human": _human_size(size),
+            "file": tmp.name,
+        })
+    except FileNotFoundError:
+        return JsonResponse({"ok": False, "error": "pg_dump not found on PATH"}, status=500)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+    finally:
+        tmp.close()
 
 
 @login_required
@@ -899,33 +1069,89 @@ def _apotek_apps_config():
     return getter
 
 
-def _probe_apotek_db():
-    """Return ('healthy'|'critical', detail) by probing ApotekApps PostgreSQL.
-
-    Tries a real psycopg connection first; falls back to a TCP socket check
-    on host:port so we still detect a disconnect without the driver.
+def _get_both_postgres_configs():
+    """Return (primary, secondary) PostgreSQL configs from ApotekApps/.env.
+    Supports both old duplicate DB_* format and new STANDBY_DB_* format.
+    Each is a dict with keys: host, port, name, user, password.
     """
-    cfg = _apotek_apps_config()
-    host = cfg("DB_HOST", "localhost")
-    port = int(cfg("DB_PORT", 5432))
-    name = cfg("DB_NAME", "apotek_pos")
-    user = cfg("DB_USER", "postgres")
-    password = cfg("DB_PASSWORD", "")
+    import os
+    apps_env = os.path.join(_apotek_apps_dir(), ".env")
+    primary = {"host": "127.0.0.1", "port": 5006, "name": "apotek_pos",
+               "user": "postgres", "password": ""}
+    secondary = {"host": "127.0.0.1", "port": 5008, "name": "apotek_pos",
+                 "user": "postgres", "password": ""}
+    try:
+        with open(apps_env, 'r') as f:
+            lines = f.readlines()
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip()
+            
+            if key == 'DB_HOST':
+                primary['host'] = value
+            elif key == 'DB_PORT':
+                try:
+                    primary['port'] = int(value)
+                except ValueError:
+                    pass
+            elif key == 'DB_NAME':
+                primary['name'] = value
+            elif key == 'DB_USER':
+                primary['user'] = value
+            elif key == 'DB_PASSWORD':
+                primary['password'] = value
+            elif key == 'STANDBY_DB_HOST':
+                secondary['host'] = value
+            elif key == 'STANDBY_DB_PORT':
+                try:
+                    secondary['port'] = int(value)
+                except ValueError:
+                    pass
+            elif key == 'STANDBY_DB_NAME':
+                secondary['name'] = value
+            elif key == 'STANDBY_DB_USER':
+                secondary['user'] = value
+            elif key == 'STANDBY_DB_PASSWORD':
+                secondary['password'] = value
+    except Exception:
+        pass
+    cc = _conn_cfg()
+    if cc:
+        if cc.pg_host:
+            primary['host'] = cc.pg_host
+            secondary['host'] = cc.pg_host
+        if cc.pg_port:
+            primary['port'] = cc.pg_port
+        if cc.pg_name:
+            primary['name'] = cc.pg_name
+            secondary['name'] = cc.pg_name
+        if cc.pg_user:
+            primary['user'] = cc.pg_user
+            secondary['user'] = cc.pg_user
+        if cc.pg_password:
+            primary['password'] = cc.pg_password
+            secondary['password'] = cc.pg_password
+    return primary, secondary
 
-    # 1) TCP reachability
+
+def _probe_postgres(config):
+    """Return ('healthy'|'critical', detail) by probing a PostgreSQL instance."""
     import socket
     try:
-        with socket.create_connection((host, port), timeout=2):
+        with socket.create_connection((config['host'], config['port']), timeout=2):
             pass
     except Exception as e:
         return "critical", f"DB unreachable: {e}"
-
-    # 2) real connection if driver available
     try:
         import psycopg
         conn = psycopg.connect(
-            host=host, port=port, dbname=name, user=user,
-            password=password, connect_timeout=2,
+            host=config['host'], port=config['port'], dbname=config['name'],
+            user=config['user'], password=config['password'], connect_timeout=2,
         )
         conn.close()
         return "healthy", "connected"
@@ -935,32 +1161,19 @@ def _probe_apotek_db():
         return "critical", f"connect failed: {e}"
 
 
-def _sqlite_size(path) -> int:
-    """Return the byte size of a file (0 if missing)."""
-    import os
-    try:
-        return os.path.getsize(path)
-    except OSError:
-        return 0
-
-
-def _postgres_size() -> dict:
-    """Return {'bytes': int|None, 'tables': int|None, 'status': ...} for the
-    ApotekApps PostgreSQL replica via a real psycopg connection when available."""
-    cfg = _apotek_apps_config()
-    host = cfg("DB_HOST", "localhost")
-    port = int(cfg("DB_PORT", 5432))
-    name = cfg("DB_NAME", "apotek_pos")
-    user = cfg("DB_USER", "postgres")
-    password = cfg("DB_PASSWORD", "")
-
+def _postgres_size(config) -> dict:
+    """Return size info for a PostgreSQL instance."""
+    host = config['host']
+    port = config['port']
+    name = config['name']
+    user = config['user']
+    password = config['password']
     try:
         import psycopg
         _connect = lambda: psycopg.connect(
             host=host, port=port, dbname=name, user=user,
             password=password, connect_timeout=2,
         )
-        _driver = "psycopg"
     except ImportError:
         try:
             import psycopg2
@@ -968,17 +1181,13 @@ def _postgres_size() -> dict:
                 host=host, port=port, dbname=name, user=user,
                 password=password, connect_timeout=2,
             )
-            _driver = "psycopg2"
         except ImportError:
-            return {"bytes": None, "tables": None, "status": "unknown",
-                    "detail": "no postgres driver (psycopg/psycopg2)"}
-
+            return {"bytes": None, "tables": None, "members": None, "points": None,
+                    "status": "unknown", "detail": "no postgres driver (psycopg/psycopg2)"}
     try:
         conn = _connect()
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT pg_database_size(%s)", (name,)
-            )
+            cur.execute("SELECT pg_database_size(%s)", (name,))
             size = cur.fetchone()[0]
             cur.execute(
                 "SELECT count(*) FROM information_schema.tables "
@@ -986,7 +1195,6 @@ def _postgres_size() -> dict:
                 "AND table_type = 'BASE TABLE'"
             )
             tables = cur.fetchone()[0]
-            # member & poin loyalty (tabel `members`, soft-delete is_deleted)
             members = points = None
             try:
                 cur.execute(
@@ -995,7 +1203,7 @@ def _postgres_size() -> dict:
                 )
                 members, points = cur.fetchone()
             except Exception:
-                members = points = None
+                pass
         conn.close()
         return {"bytes": size, "tables": tables, "members": members,
                 "points": points, "status": "healthy",
@@ -1003,6 +1211,32 @@ def _postgres_size() -> dict:
     except Exception as e:
         return {"bytes": None, "tables": None, "members": None, "points": None,
                 "status": "critical", "detail": f"connect failed: {e}"}
+
+
+def _probe_apotek_db():
+    """Return ('healthy'|'critical', detail) by probing ApotekApps PostgreSQL.
+
+    Maintains backward compatibility by using the primary DB config.
+    For secondary DB probing, use _probe_postgres() directly with secondary config.
+    """
+    cfg = _apotek_apps_config()
+    config = {
+        "host": cfg("DB_HOST", "localhost"),
+        "port": int(cfg("DB_PORT", 5432)),
+        "name": cfg("DB_NAME", "apotek_pos"),
+        "user": cfg("DB_USER", "postgres"),
+        "password": cfg("DB_PASSWORD", ""),
+    }
+    return _probe_postgres(config)
+
+
+def _sqlite_size(path) -> int:
+    """Return the byte size of a file (0 if missing)."""
+    import os
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
 
 
 def _redis_size() -> dict:
@@ -1543,8 +1777,12 @@ def api_topology_json(request):
     since = now - timedelta(minutes=5)
 
     # Real health probes for ApotekApps backing services
-    db_status, db_detail = _probe_apotek_db()
-    pg = _postgres_size()
+    db_configs = _get_both_postgres_configs()
+    primary_cfg, secondary_cfg = db_configs
+    db_status, db_detail = _probe_postgres(primary_cfg)
+    pg = _postgres_size(primary_cfg)
+    db_secondary_status, db_secondary_detail = _probe_postgres(secondary_cfg)
+    pg_secondary = _postgres_size(secondary_cfg)
     redis_status, redis_detail, redis_meta = _probe_redis()
     media_status, media_detail, media_meta = _probe_media()
     nginx_status, nginx_detail, nginx_meta = _probe_nginx()
@@ -1569,9 +1807,20 @@ def api_topology_json(request):
         pg_parts.append(f"Poin: {pg['points']}")
     pg_detail_full = " · ".join(p for p in pg_parts if p)
     nodes.append({
-        "id": "pg", "label": "PostgreSQL", "kind": "database",
-        "tech": "PostgreSQL 16", "status": db_status, "detail": pg_detail_full,
+        "id": "pg", "label": "PostgreSQL Primary", "kind": "database",
+        "tech": f"PostgreSQL 18 :5006", "status": db_status, "detail": pg_detail_full,
         "members": pg.get("members"), "points": pg.get("points"),
+    })
+    pg_sec_parts = [db_secondary_detail]
+    if pg_secondary.get("members") is not None:
+        pg_sec_parts.append(f"Member: {pg_secondary['members']}")
+    if pg_secondary.get("points") is not None:
+        pg_sec_parts.append(f"Poin: {pg_secondary['points']}")
+    pg_sec_detail_full = " · ".join(p for p in pg_sec_parts if p)
+    nodes.append({
+        "id": "pg_secondary", "label": "PostgreSQL Secondary", "kind": "database",
+        "tech": f"PostgreSQL 18 :5008", "status": db_secondary_status, "detail": pg_sec_detail_full,
+        "members": pg_secondary.get("members"), "points": pg_secondary.get("points"),
     })
     if redis_meta.get("version"):
         redis_tech = f"Redis {redis_meta['version']} · db{redis_meta.get('db', 0)}"
@@ -1590,11 +1839,11 @@ def api_topology_json(request):
         "status": media_status, "detail": media_detail,
         "path": media_meta.get("path"), "files": media_meta.get("files"),
     })
-    # apps_api health depends on DB + recent ping success
+    # apps_api health depends on both DBs + recent ping success
     recent_all = APIRequestLog.objects.filter(created_at__gte=since)
     recent_total = recent_all.count()
     recent_fail = recent_all.filter(status__in=["fail", "error"]).count()
-    if db_status == "critical":
+    if db_status == "critical" or db_secondary_status == "critical":
         apps_status = "critical"
     elif recent_total and (recent_fail / recent_total) > 0.5:
         apps_status = "critical"
@@ -1673,6 +1922,8 @@ def api_topology_json(request):
     # edges: infra relationships (reflect real health)
     edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": db_status,
                   "label": "SQL"})
+    edges.append({"from": "pg_secondary", "to": "apps_api", "requests_5m": 0, "status": db_secondary_status,
+                  "label": "replica"})
     edges.append({"from": "redis", "to": "apps_api", "requests_5m": 0, "status": redis_status,
                   "label": "cache"})
     edges.append({"from": "media", "to": "apps_api", "requests_5m": 0, "status": media_status,

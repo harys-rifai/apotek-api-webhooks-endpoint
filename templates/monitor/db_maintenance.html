@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}DB Maintenance — OrchestrationApps{% endblock %}
+
+{% block extra_head %}
+<style>
+  .maint-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: .6rem;
+  }
+  .maint-card {
+    background: var(--bg-card, #13132a);
+    border: 1px solid var(--color-border, #2a2a40);
+    border-radius: var(--radius-lg, 12px);
+    padding: .65rem .75rem;
+  }
+  .maint-card h2 {
+    margin: 0 0 .25rem;
+    font-size: .88rem;
+    color: var(--color-text, #eaeaff);
+  }
+  .maint-meta {
+    margin: 0 0 .45rem;
+    color: var(--color-muted, #8a8aa0);
+    font-size: .72rem;
+  }
+  .maint-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+  }
+  .btn {
+    border: 1px solid var(--color-border, #2a2a40);
+    background: rgba(255,255,255,.04);
+    color: var(--color-text, #eaeaff);
+    padding: .3rem .5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: .72rem;
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+  }
+  .btn:hover:not(:disabled) {
+    border-color: var(--neon-cyan, #36e0ff);
+    color: var(--neon-cyan, #36e0ff);
+  }
+  .btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+  .btn.is-loading { opacity: .7; }
+  .btn--primary { border-color: #5b8cff; color:#aaccff; }
+  .btn--secondary { border-color: #9b8cff; color:#d4cbff; }
+  .btn--success { border-color: #36ff9e; color:#7affc8; }
+  .btn--danger { border-color: #ff4d6d; color:#ff99aa; }
+  .shared-terminal {
+    margin-top: .6rem;
+    background: rgba(0,0,0,.25);
+    border: 1px solid var(--color-border, #2a2a40);
+    border-radius: 8px;
+    padding: .5rem .6rem;
+    min-height: 160px;
+    max-height: 260px;
+    overflow-y: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: .76rem;
+    color: var(--color-text, #eaeaff);
+  }
+  .terminal__output > div { margin: .12rem 0; word-break: break-word; }
+  .terminal__time { color: var(--color-muted, #8a8aa0); margin-right: .35rem; }
+  [data-theme="light"] .maint-card { background:#f6f7fb; }
+  [data-theme="light"] .shared-terminal { background:#ffffff; border-color:#dde0ea; }
+  [data-theme="light"] .terminal__time { color:#5a5a6e; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page">
+  <div class="page__head">
+    <div>
+      <h1 class="page__title"><i class="fa-solid fa-database"></i> Database Maintenance</h1>
+      <p class="page__sub">Backup, VACUUM FULL, REINDEX, ANALYZE untuk semua database.</p>
+    </div>
+  </div>
+
+  <div class="maint-grid">
+    <div class="maint-card">
+      <h2><i class="fa-solid fa-hard-drive"></i> SQLite</h2>
+      <p class="maint-meta">Monitor</p>
+      <div class="maint-actions">
+        <button class="btn btn--primary" onclick="runMaint(this, 'sqlite', 'vacuum')">
+          <i class="fa-solid fa-wind"></i> VACUUM
+        </button>
+      </div>
+    </div>
+
+    <div class="maint-card">
+      <h2><i class="fa-solid fa-database"></i> PostgreSQL Primary</h2>
+      <p class="maint-meta">PostgreSQL 18 :5006 · apotek_pos</p>
+      <div class="maint-actions">
+        <button class="btn btn--primary" onclick="runMaint(this, 'pg', 'vacuum_full')">
+          <i class="fa-solid fa-wind"></i> VACUUM FULL
+        </button>
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'vacuum_analyze')">
+          <i class="fa-solid fa-magnifying-glass-chart"></i> VACUUM ANALYZE
+        </button>
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'reindex')">
+          <i class="fa-solid fa-list-ol"></i> REINDEX
+        </button>
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'analyze')">
+          <i class="fa-solid fa-chart-bar"></i> ANALYZE
+        </button>
+        <button class="btn btn--success" onclick="runMaint(this, 'pg', 'backup')">
+          <i class="fa-solid fa-download"></i> Backup
+        </button>
+      </div>
+    </div>
+
+    <div class="maint-card">
+      <h2><i class="fa-solid fa-database"></i> PostgreSQL Secondary</h2>
+      <p class="maint-meta">PostgreSQL 18 :5008 · apotek_pos</p>
+      <div class="maint-actions">
+        <button class="btn btn--primary" onclick="runMaint(this, 'pg_secondary', 'vacuum_full')">
+          <i class="fa-solid fa-wind"></i> VACUUM FULL
+        </button>
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'vacuum_analyze')">
+          <i class="fa-solid fa-magnifying-glass-chart"></i> VACUUM ANALYZE
+        </button>
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'reindex')">
+          <i class="fa-solid fa-list-ol"></i> REINDEX
+        </button>
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'analyze')">
+          <i class="fa-solid fa-chart-bar"></i> ANALYZE
+        </button>
+        <button class="btn btn--success" onclick="runMaint(this, 'pg_secondary', 'backup')">
+          <i class="fa-solid fa-download"></i> Backup
+        </button>
+      </div>
+    </div>
+
+    <div class="maint-card">
+      <h2><i class="fa-solid fa-cube"></i> Redis Cache</h2>
+      <p class="maint-meta">127.0.0.1:6379 · db4</p>
+      <div class="maint-actions">
+        <button class="btn btn--danger" onclick="runMaint(this, 'redis', 'flushdb')">
+          <i class="fa-solid fa-broom"></i> FLUSHDB
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="shared-terminal" id="shared-terminal">
+    <div class="terminal__output">Menunggu aksi...</div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function appendTerm(html) {
+  const el = document.querySelector('#shared-terminal .terminal__output');
+  const ts = new Date().toLocaleTimeString();
+  el.innerHTML += '<div><span class="terminal__time">[' + ts + ']</span> ' + html + '</div>';
+  const container = document.getElementById('shared-terminal');
+  container.scrollTop = container.scrollHeight;
+}
+function setBusy(btn, busy) {
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.classList.toggle('is-loading', busy);
+}
+const URLS = {
+  sqlite_vacuum: '{% url "api_db_sqlite_vacuum" %}',
+  pg_vacuum: '{% url "api_db_vacuum" %}',
+  pg_vacuum_secondary: '{% url "api_db_vacuum_secondary" %}',
+  pg_reindex_primary: '{% url "api_db_reindex" db="primary" %}',
+  pg_reindex_secondary: '{% url "api_db_reindex" db="secondary" %}',
+  pg_analyze_primary: '{% url "api_db_analyze" db="primary" %}',
+  pg_analyze_secondary: '{% url "api_db_analyze" db="secondary" %}',
+  pg_vacuum_analyze_primary: '{% url "api_db_vacuum_analyze" db="primary" %}',
+  pg_vacuum_analyze_secondary: '{% url "api_db_vacuum_analyze" db="secondary" %}',
+  pg_backup_primary: '{% url "api_db_backup_pg" db="primary" %}',
+  pg_backup_secondary: '{% url "api_db_backup_pg" db="secondary" %}',
+  redis_flush: '{% url "api_db_redis_flush" %}',
+};
+
+async function runMaint(btn, store, action) {
+  let url = '';
+  if (store === 'sqlite' && action === 'vacuum') {
+    url = URLS.sqlite_vacuum;
+  } else if (store === 'pg') {
+    if (action === 'vacuum_full') url = URLS.pg_vacuum;
+    else if (action === 'vacuum_analyze') url = URLS.pg_vacuum_analyze_primary;
+    else if (action === 'reindex') url = URLS.pg_reindex_primary;
+    else if (action === 'analyze') url = URLS.pg_analyze_primary;
+    else if (action === 'backup') url = URLS.pg_backup_primary;
+  } else if (store === 'pg_secondary') {
+    if (action === 'vacuum_full') url = URLS.pg_vacuum_secondary;
+    else if (action === 'vacuum_analyze') url = URLS.pg_vacuum_analyze_secondary;
+    else if (action === 'reindex') url = URLS.pg_reindex_secondary;
+    else if (action === 'analyze') url = URLS.pg_analyze_secondary;
+    else if (action === 'backup') url = URLS.pg_backup_secondary;
+  } else if (store === 'redis' && action === 'flushdb') {
+    url = URLS.redis_flush;
+  }
+  if (!url) return;
+  appendTerm('Menjalankan <b>' + action + '</b>...');
+  setBusy(btn, true);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      appendTerm('<span style="color:#36ff9e">✓ ' + data.detail + '</span>');
+      if (data.file) {
+        appendTerm('File backup: ' + data.file + ' (' + data.human + ')');
+      }
+    } else {
+      appendTerm('<span style="color:#ff4d6d">✗ ' + (data.error || 'Gagal') + '</span>');
+    }
+  } catch (e) {
+    appendTerm('<span style="color:#ff4d6d">✗ Error: ' + e.message + '</span>');
+  } finally {
+    setBusy(btn, false);
+  }
+}
+function getCookie(name) {
+  const m = document.cookie.match(new RegExp('(^|;)\\s*' + name + '=([^;]+)'));
+  return m ? m[2] : '';
+}
+</script>
+{% endblock %}

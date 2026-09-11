@@ -404,13 +404,23 @@
       </li>
       <li class="db-size__row" data-store="postgres">
         <span class="db-size__icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#336791"><path d="M12 2.3c3.9 0 7 1.35 7 4.1 0 1.5-.83 2.85-2.15 3.78.62.86 1 1.9 1 3.02 0 1.95-1.2 3.6-3 4.54.5 1.05.5 2.05-.13 2.86H9.28c-.63-.8-.63-1.8-.13-2.86-1.8-.94-3-2.6-3-4.54 0-1.12.38-2.16 1-3.02C5.83 8.25 5 6.9 5 5.4 5 3.65 8.1 2.3 12 2.3zm0 2.05c-2.9 0-4.8.92-4.8 2.05 0 .85.9 1.5 2.1 1.9l.7 1.7 1.4-1.95h1.2l1.4 1.95.7-1.7c1.2-.4 2.1-1.05 2.1-1.9 0-1.13-1.9-2.05-4.8-2.05zM9.1 11.5c-1.05.6-1.75 1.5-1.75 2.6 0 1.2.9 2.25 2.4 2.9l.7-.55-.2-1.7-.8.13.25-1.7-.85-.5.45-1.55-.95.42.7-1.05zm5.8 0 .7 1.05-.95-.42.45 1.55-.85.5.25 1.7-.8-.13-.2 1.7.7.55c1.5-.65 2.4-1.7 2.4-2.9 0-1.1-.7-2-1.75-2.6z"/></svg></span>
-        <span class="db-size__name">PostgreSQL (ApotekApps)</span>
+        <span class="db-size__name">PostgreSQL Primary</span>
         <span class="db-size__val" id="dbPg">—</span>
         <span class="db-size__meta" id="dbPgMeta"></span>
         <button type="button" class="db-size__vacuum" id="dbVacuumBtn" title="Jalankan VACUUM FULL">
           <i class="fa-solid fa-wind"></i> VACUUM FULL
         </button>
         <span class="db-size__sub" id="dbPgSub"></span>
+      </li>
+      <li class="db-size__row" data-store="postgres-secondary">
+        <span class="db-size__icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#336791"><path d="M12 2.3c3.9 0 7 1.35 7 4.1 0 1.5-.83 2.85-2.15 3.78.62.86 1 1.9 1 3.02 0 1.95-1.2 3.6-3 4.54.5 1.05.5 2.05-.13 2.86H9.28c-.63-.8-.63-1.8-.13-2.86-1.8-.94-3-2.6-3-4.54 0-1.12.38-2.16 1-3.02C5.83 8.25 5 6.9 5 5.4 5 3.65 8.1 2.3 12 2.3zm0 2.05c-2.9 0-4.8.92-4.8 2.05 0 .85.9 1.5 2.1 1.9l.7 1.7 1.4-1.95h1.2l1.4 1.95.7-1.7c1.2-.4 2.1-1.05 2.1-1.9 0-1.13-1.9-2.05-4.8-2.05zM9.1 11.5c-1.05.6-1.75 1.5-1.75 2.6 0 1.2.9 2.25 2.4 2.9l.7-.55-.2-1.7-.8.13.25-1.7-.85-.5.45-1.55-.95.42.7-1.05zm5.8 0 .7 1.05-.95-.42.45 1.55-.85.5.25 1.7-.8-.13-.2 1.7.7.55c1.5-.65 2.4-1.7 2.4-2.9 0-1.1-.7-2-1.75-2.6z"/></svg></span>
+        <span class="db-size__name">PostgreSQL Secondary</span>
+        <span class="db-size__val" id="dbPgSecondary">—</span>
+        <span class="db-size__meta" id="dbPgSecondaryMeta"></span>
+        <button type="button" class="db-size__vacuum" id="dbVacuumSecondaryBtn" title="Jalankan VACUUM FULL">
+          <i class="fa-solid fa-wind"></i> VACUUM FULL
+        </button>
+        <span class="db-size__sub" id="dbPgSecondarySub"></span>
       </li>
       <li class="db-size__row" data-store="redis">
         <span class="db-size__icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#d82c20"><path d="M3 7.2 12 4l9 3.2-9 3.1L3 7.2zm0 3.4 9 3.1 9-3.1-2.3 5.6L12 19.6 5.3 16.2 3 10.6zm2.4 1.7.55 4.2L12 18.6l6.05-2.3.55-4.2-3.05 1.2-3.5-1.5-3.5 1.5-3.05-1.2z"/></svg></span>
@@ -590,17 +600,18 @@
     //   infra on the left, the app API in the middle, monitor on the right,
     //   and the per-module microservices in a flowing grid on the right.
     const CORE = {
-      python:     { x: 130, y: 40 },
-      system:     { x: 130, y: -150 },
-      pg:         { x: 130, y: 230 },
-      redis:      { x: 130, y: 420 },
-      media:      { x: 130, y: 610 },
-      nginx:      { x: 430, y: 40 },
-      apps_api:   { x: 430, y: 420 },
-      monitor:    { x: 760, y: 380 },
-      monitor_db: { x: 980, y: 200 },
-      email:      { x: 760, y: 40 },
-      member:     { x: 1440, y: 480 },
+      python:         { x: 130, y: 40 },
+      system:         { x: 130, y: -150 },
+      pg:             { x: 130, y: 130 },
+      pg_secondary:   { x: 130, y: 330 },
+      redis:          { x: 130, y: 520 },
+      media:          { x: 130, y: 710 },
+      nginx:          { x: 430, y: 40 },
+      apps_api:       { x: 430, y: 420 },
+      monitor:        { x: 760, y: 380 },
+      monitor_db:     { x: 980, y: 200 },
+      email:          { x: 760, y: 40 },
+      member:         { x: 1440, y: 480 },
     };
     if (CORE[n.id]) return { x: CORE[n.id].x, y: CORE[n.id].y };
     // module services → flowing grid kept clear of the core nodes (far right)
@@ -1097,15 +1108,19 @@
 
   // ── Storage & Database sizes ─────────────────────────────────────
   const dbSizeRows = {
-    sqlite:  document.querySelector('.db-size__row[data-store="sqlite"]'),
-    postgres: document.querySelector('.db-size__row[data-store="postgres"]'),
-    redis:   document.querySelector('.db-size__row[data-store="redis"]'),
+    sqlite:             document.querySelector('.db-size__row[data-store="sqlite"]'),
+    postgres:            document.querySelector('.db-size__row[data-store="postgres"]'),
+    "postgres-secondary": document.querySelector('.db-size__row[data-store="postgres-secondary"]'),
+    redis:               document.querySelector('.db-size__row[data-store="redis"]'),
   };
   const dbSqliteEl = document.getElementById("dbSqlite");
   const dbSqliteMetaEl = document.getElementById("dbSqliteMeta");
   const dbPgEl = document.getElementById("dbPg");
   const dbPgMetaEl = document.getElementById("dbPgMeta");
   const dbPgSubEl = document.getElementById("dbPgSub");
+  const dbPgSecondaryEl = document.getElementById("dbPgSecondary");
+  const dbPgSecondaryMetaEl = document.getElementById("dbPgSecondaryMeta");
+  const dbPgSecondarySubEl = document.getElementById("dbPgSecondarySub");
   const dbRedisEl = document.getElementById("dbRedis");
   const dbRedisMetaEl = document.getElementById("dbRedisMeta");
   const dbRefreshBtn = document.getElementById("dbRefreshBtn");
@@ -1142,6 +1157,9 @@
         const d = await res.json();
         setStore(dbSizeRows.sqlite, dbSqliteEl, dbSqliteMetaEl, d.sqlite);
         setStore(dbSizeRows.postgres, dbPgEl, dbPgMetaEl, d.postgres);
+        if (dbSizeRows["postgres-secondary"] && dbPgSecondaryEl) {
+          setStore(dbSizeRows["postgres-secondary"], dbPgSecondaryEl, dbPgSecondaryMetaEl, d.postgres_secondary);
+        }
         setStore(dbSizeRows.redis, dbRedisEl, dbRedisMetaEl, d.redis);
       }
     } catch (e) { /* abaikan gagal ambil ukuran db */ }
