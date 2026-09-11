@@ -1965,6 +1965,10 @@ def api_topology_json(request):
                       "requests_5m": total, "status": status})
 
     # edges: infra relationships (reflect real health)
+    edges.append({"from": "waf", "to": "ingress", "requests_5m": 0, "status": waf_status,
+                  "label": "HTTP"})
+    edges.append({"from": "ingress", "to": "nginx", "requests_5m": 0, "status": ingress_status,
+                  "label": "ingress"})
     edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": db_status,
                   "label": "SQL"})
     edges.append({"from": "pg_secondary", "to": "apps_api", "requests_5m": 0, "status": db_secondary_status,
