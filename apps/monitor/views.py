@@ -1492,6 +1492,32 @@ def _probe_nginx():
     return "warning", "running but no listener on 80/443", meta
 
 
+def _probe_ingress(status, detail, meta):
+    """Ingress front-end sits in front of Nginx; reuse Nginx listener health."""
+    if status == "critical":
+        return "warning", "ingress not reachable", meta
+    return status, f"Ingress · {detail}", meta
+
+
+def _probe_waf():
+    """Probe whether a WAF module (ModSecurity) is configured on Nginx."""
+    import shutil
+    import subprocess
+
+    meta = {"name": "ModSecurity"}
+    nginx_bin = shutil.which("nginx")
+    if not nginx_bin:
+        return "idle", "no nginx binary (WAF cannot be configured)", meta
+    try:
+        out = subprocess.run([nginx_bin, "-V"], capture_output=True, text=True, timeout=3)
+        text = (out.stdout or "") + (out.stderr or "")
+        if "modsecurity" in text.lower() or "waf" in text.lower():
+            return "healthy", "WAF enabled (ModSecurity)", meta
+        return "idle", "WAF tidak terkonfigurasi", meta
+    except Exception as e:
+        return "warning", f"deteksi WAF gagal: {e}", meta
+
+
 def _probe_python():
     """Probe the Python runtime that runs ApotekMonitor / ApotekApps.
 
@@ -1798,6 +1824,8 @@ def api_topology_json(request):
     nginx_status, nginx_detail, nginx_meta = _probe_nginx()
     python_status, python_detail, python_meta = _probe_python()
     system_status, system_detail, system_meta = _probe_system()
+    ingress_status, ingress_detail, ingress_meta = _probe_ingress(*_probe_nginx())
+    waf_status, waf_detail, waf_meta = _probe_waf()
     email_status, email_detail, email_meta = _probe_email()
 
     # Build nodes from monitored endpoints (grouped by module = service)
@@ -1901,6 +1929,14 @@ def api_topology_json(request):
         "disk_pct": (system_meta.get("disk") or {}).get("pct"),
         "mem_pct": (system_meta.get("mem") or {}).get("pct"),
         "load_pct": (system_meta.get("load") or {}).get("pct"),
+    })
+    nodes.append({
+        "id": "waf", "label": "WAF", "kind": "proxy",
+        "tech": "ModSecurity / WAF", "status": waf_status, "detail": waf_detail,
+    })
+    nodes.append({
+        "id": "ingress", "label": "Ingress", "kind": "proxy",
+        "tech": "Nginx Ingress · :80 / :443", "status": ingress_status, "detail": ingress_detail,
     })
 
     # Module → service nodes (one per module = microservice)

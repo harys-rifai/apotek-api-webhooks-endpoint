@@ -1209,6 +1209,7 @@
     });
   }
   wireMaintBtn("dbVacuumBtn", "{% url 'api_db_vacuum' %}", "VACUUM FULL selesai");
+  wireMaintBtn("dbVacuumSecondaryBtn", "{% url 'api_db_vacuum_secondary' %}", "VACUUM FULL selesai");
   wireMaintBtn("dbSqliteVacuumBtn", "{% url 'api_db_sqlite_vacuum' %}", "SQLite VACUUM selesai");
   wireMaintBtn("dbRedisFlushBtn", "{% url 'api_db_redis_flush' %}", "Redis FLUSHDB selesai");
 
