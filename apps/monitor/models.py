@@ -196,6 +196,39 @@ class WebhookEvent(models.Model):
         return f"{self.event_type} [{self.status}] @ {self.received_at:%Y-%m-%d %H:%M}"
 
 
+class AppVersion(models.Model):
+    app_name = models.CharField(max_length=100, unique=True)
+    version = models.CharField(max_length=20, default="1.0.0")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "App Version"
+        verbose_name_plural = "App Versions"
+
+    def __str__(self):
+        return f"{self.app_name} v{self.version}"
+
+    @classmethod
+    def get_version(cls, app_name, default="1.0.0"):
+        try:
+            return cls.objects.get(app_name=app_name).version
+        except cls.DoesNotExist:
+            from pathlib import Path
+            vf = Path(__file__).resolve().parent.parent.parent.parent / "VERSION"
+            if vf.exists():
+                try:
+                    return vf.read_text().strip() or default
+                except OSError:
+                    pass
+            return default
+
+    @classmethod
+    def set_version(cls, app_name, version):
+        obj, _ = cls.objects.update_or_create(
+            app_name=app_name, defaults={"version": version})
+        return obj
+
+
 class AIConfig(models.Model):
     """Configuration for the OpenAI-compatible AI router used by the chatbot.
 

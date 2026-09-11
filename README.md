@@ -1,4 +1,4 @@
-# ApotekMonitor
+# ApotekMonitor v1.0.0
 
 ![ApotekMonitor](img/monitoringSystem.png)
 

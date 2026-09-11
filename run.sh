@@ -67,8 +67,14 @@ else:
 "
 
 echo ""
+# Read version
+VERSION="1.0.0"
+if [ -f "VERSION" ]; then
+    VERSION=$(cat "VERSION" | tr -d '[:space:]')
+fi
 echo "======================================"
-echo "  ApotekMonitor berjalan di port 8090"
+echo "  ApotekMonitor v$VERSION"
+echo "  berjalan di port 8090"
 echo "  URL  : http://127.0.0.1:8090"
 echo "  Login: admin / admin"
 echo "======================================"
