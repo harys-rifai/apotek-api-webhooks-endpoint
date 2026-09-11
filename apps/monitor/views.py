@@ -41,6 +41,16 @@ def _human_size(num: float) -> str:
     return f"{n:.1f} {units[i]}"
 
 
+def _safe_remove(path):
+    """Hapus file bila ada, tak peduli error (untuk cleanup backup sederhana)."""
+    import os
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
 def _stats_for_period(days: int = 7) -> dict:
     since = timezone.now() - timedelta(days=days)
     qs = APIRequestLog.objects.filter(created_at__gte=since)
@@ -810,8 +820,14 @@ def api_db_vacuum_analyze(request, db="primary"):
 @login_required
 @require_POST
 def api_db_backup_pg(request, db="primary"):
-    """Backup PostgreSQL using pg_dump."""
-    import subprocess, tempfile, os
+    """Backup PostgreSQL (Primary atau Secondary) menggunakan pg_dump.
+
+    File ditulis ke <BASE_DIR>/backups/db/ (bukan folder sistem /tmp),
+    konsisten dengan snapshot SQLite pada management command db_backup.
+    """
+    import subprocess, os, glob
+    from django.utils import timezone
+
     configs = _get_both_postgres_configs()
     config = configs[0] if db == "primary" else configs[1]
     host = config["host"]
@@ -819,36 +835,41 @@ def api_db_backup_pg(request, db="primary"):
     name = config["name"]
     user = config["user"]
     password = config["password"]
+
+    backup_dir = os.path.join(settings.BASE_DIR, "backups", "db")
+    os.makedirs(backup_dir, exist_ok=True)
+    ts = timezone.localtime().strftime("%Y%m%d_%H%M%S")
+    dest = os.path.join(backup_dir, f"pg_{db}_{host}_{port}_{ts}.sql")
+
     env = os.environ.copy()
     if password:
         env["PGPASSWORD"] = password
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".sql")
     try:
-        cmd = [
+        res = subprocess.run([
             "pg_dump",
-            "-h", str(host),
-            "-p", str(port),
-            "-U", user,
-            "-d", name,
-            "-f", tmp.name,
-        ]
-        res = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            "-h", str(host), "-p", str(port),
+            "-U", user, "-d", name, "-f", dest,
+        ], env=env, capture_output=True, text=True)
         if res.returncode != 0:
+            _safe_remove(dest)
             return JsonResponse({"ok": False, "error": res.stderr.strip() or "pg_dump failed"}, status=500)
-        size = os.path.getsize(tmp.name)
+        size = os.path.getsize(dest)
+        # rotasi: pertahankan 8 backup PostgreSQL (primary + secondary) terbaru
+        snaps = sorted(glob.glob(os.path.join(backup_dir, "pg_*.sql*")))
+        for old in snaps[:-8]:
+            _safe_remove(old)
         return JsonResponse({
             "ok": True,
             "detail": f"Backup selesai · {name}@{host}:{port}",
             "bytes": size,
             "human": _human_size(size),
-            "file": tmp.name,
+            "file": dest,
         })
     except FileNotFoundError:
         return JsonResponse({"ok": False, "error": "pg_dump not found on PATH"}, status=500)
     except Exception as e:
+        _safe_remove(dest)
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
-    finally:
-        tmp.close()
 
 
 @login_required
