@@ -1,16 +1,16 @@
 # ApotekMonitor v1.0.0
 
-![ApotekMonitor](img/monitoringSystem.png)
+![ApotekMonitor topology](img/new.png)
 
-Observability & orchestration dashboard for [ApotekApps](https://github.com/harys-rifai/ApotekApps) — monitors endpoint health, request logs, webhook events, latency, and business success rate, plus a **realtime infrastructure topology** with a **live network stream** and **email monitoring**.
+Observability & orchestration dashboard for [ApotekApps](https://github.com/harys-rifai/ApotekApps) — monitors endpoint health, request logs, webhook events, latency, and business success rate, plus a **realtime infrastructure topology** (Dynatrace-style smartscape) with a **live network stream**, **WAF & Ingress monitoring**, **PostgreSQL secondary** support, and **email monitoring**.
 
 ---
 
 ## Overview
 
-| Dashboard | Topology · Smartscape | Config | Endpoints | Logs |
-|-----------|----------------------|--------|-----------|------|
-| KPI cards, charts, tables | Node + edge map with live network stream | DB / Redis / AI / Email | Endpoint list + ping | Filter & pagination |
+| Dashboard | Topology · Smartscape | Config | Maintenance | Endpoints | Logs |
+|-----------|----------------------|--------|-------------|-----------|------|
+| KPI cards, charts, tables | Node + edge map with live network stream, WAF & Ingress nodes | DB / Redis / AI / Email | SQLite · PostgreSQL (Primary + Secondary) · Redis | Endpoint list + ping | Filter & pagination |
 
 ---
 
@@ -22,14 +22,17 @@ Observability & orchestration dashboard for [ApotekApps](https://github.com/hary
 - **Latency Chart** — line chart of average response time per day
 - **Top Endpoints Table** — most-called endpoints ranking + pagination
 - **Slowest Endpoints** — endpoints with the highest average latency
-- **Topology · Smartscape** — Dynatrace-style map of infrastructure nodes (PostgreSQL, Redis, Media, Nginx, Python, System Host, ApotekApps API, OrchestrationApps, **Email Monitor**) and per-module microservices, with edges representing relationships & traffic.
+- **Topology · Smartscape** — Dynatrace-style map of infrastructure nodes (**PostgreSQL Primary**, **PostgreSQL Secondary**, Redis, Media, Nginx, Python Runtime, System Host, WAF, Ingress, ApotekApps REST API, OrchestrationApps, **Email Monitor**), per-module microservices, and a loyalty **Member** node (member count & poin), with edges representing relationships & traffic. Nodes use brand-accurate icons (PostgreSQL, Redis, SQLite, Nginx) and auto-fit on first load, preserving manual drag positions.
 - **Live Network Stream** — *real-time* network traffic via Server-Sent Events (SSE). Every new API request or webhook spawns a "packet" that travels along the matching topology edge, with a side feed panel (pkts, pkts/s, requests, webhooks).
 - **Email Monitoring** — dedicated **Email Monitor** topology node probing the SMTP server, plus an **Email Monitoring** side panel (live status + test-email button) and a **Config → Email (ApotekApps)** card that auto-reads SMTP config (host, port, user, TLS, from) from ApotekApps `/api/common/system-status/` & `/api/common/system-config/`.
-- **Storage & Database Panel** — live sizes for Monitor SQLite, ApotekApps PostgreSQL, and Redis, with maintenance actions (VACUUM / VACUUM FULL / FLUSHDB).
+- **Storage & Database Panel** — live sizes for Monitor SQLite, ApotekApps PostgreSQL (Primary + Secondary), and Redis.
+- **Database Maintenance** — one-click maintenance on each store via `/maintenance/`: SQLite **VACUUM**, PostgreSQL **VACUUM FULL / VACUUM ANALYZE / REINDEX / ANALYZE / Backup** (run on Primary **and** Secondary), and Redis **FLUSHDB** (each action opens in autocommit mode so it works outside a transaction block).
 - **AI Insight** — auto-generated infrastructure insights (every 60s) plus an AI chat assistant (OpenAI-compatible router).
-- **Brand Icons** — nodes use accurate brand SVGs (PostgreSQL, Redis, SQLite, Nginx via official Simple Icons paths; other nodes via Font Awesome), all rendered at a uniform size without hexagon badges.
-- **Health Probes** — real checks against PostgreSQL, Redis, media storage, Nginx, the Python runtime, System Host, and SMTP (email).
+- **Brand Icons** — nodes use accurate brand SVGs (PostgreSQL, Redis, SQLite, Nginx via official Simple Icons paths; others via Font Awesome), all rendered at a uniform size without hexagon badges.
+- **WAF & Ingress** — dedicated topology nodes + edges (`waf → ingress → nginx → apps_api`) reflecting the deployed reverse-proxy stack; status probed live.
+- **Health Probes** — real checks against PostgreSQL (Primary + Secondary), Redis, media storage, Nginx, the Python runtime, System Host, and SMTP (email).
 - **Member Monitoring** — loyalty node showing member count & total poin from PostgreSQL.
+- **Alerts** — topology status-change notifications (critical / warning / recovered) stored and shown in the navbar.
 - **Request Logs** — filter by status, method, path + client-side pagination
 - **Webhook Receiver** — `POST /webhook/receive/` to ingest events from external systems
 - **Deliveries** — webhook delivery history
@@ -37,7 +40,6 @@ Observability & orchestration dashboard for [ApotekApps](https://github.com/hary
 - **Config Page** — manage SQLite, PostgreSQL (ApotekApps replica), Redis, AI Assistant, and read-only Email (ApotekApps) config
 - **JWT Auto-Refresh** — tokens managed automatically (login → refresh → re-login)
 - **Retry + Rate Limiting** — up to 3 retries with exponential backoff, throttled to 60 req/min
-- **Alerts** — topology status-change notifications (critical / warning / recovered) stored and shown in the navbar
 - **Dark Theme** — Neon Dark UI, matching ApotekApps
 
 ---
@@ -90,6 +92,8 @@ APOTEK_ADMIN_PASSWORD=admin
 ```
 
 > Email/SMTP configuration is **not** stored here — it is read automatically from ApotekApps (`/api/common/system-status/` & `/api/common/system-config/`).
+>
+> PostgreSQL Primary / Secondary connection is read from `ApotekApps/.env` (`DB_*` / `STANDBY_DB_*`), with optional overrides on the **Config** page.
 
 ---
 
@@ -115,7 +119,8 @@ ApotekMonitor/
 │       │                  #   Alert, WebhookEvent, AIConfig, ConnectionConfig, AIChatLog
 │       ├── services.py    # HTTP client (JWT, retry, rate-limit)
 │       ├── views.py       # Dashboard, logs, ping, stats, topology, network
-│       │                  #   stream, webhook, email monitor, config, AI
+│       │                  #   stream, webhook, email monitor, config, AI,
+│       │                  #   DB maintenance (SQLite/PG/Secondary/Redis)
 │       ├── urls.py
 │       ├── ai_insight.py  # Infrastructure insight generator
 │       ├── ai_chat.py     # AI chatbot caller
@@ -137,8 +142,8 @@ ApotekMonitor/
 │   │   ├── dashboard.html
 │   │   ├── endpoints.html
 │   │   ├── endpoint_detail.html
-│   │   ├── logs.html
 │   │   ├── topology.html
+│   │   ├── db_maintenance.html
 │   │   ├── config.html
 │   │   ├── webhooks.html
 │   │   ├── alerts.html
@@ -169,6 +174,7 @@ ApotekMonitor/
 | `/endpoints/<id>/` | Endpoint detail + log history |
 | `/logs/` | All request logs (filter + pagination) |
 | `/topology/` | Topology smartscape + live network stream + email monitoring |
+| `/maintenance/` | SQLite / PostgreSQL (Primary + Secondary) / Redis maintenance actions |
 | `/config/` | Connection & AI config (email read from ApotekApps) |
 | `/webhooks/` | Received webhook events |
 | `/alerts/` | Alert / notification history |
@@ -177,14 +183,22 @@ ApotekMonitor/
 | `/api/stats/` | Chart data (JSON) |
 | `/api/activity/` | Recent activity for topology animation (JSON) |
 | `/api/topology/` | Topology nodes & edges (JSON, includes `infra.email`) |
+| `/api/db-sizes/` | Storage & database sizes — SQLite, PostgreSQL Primary + Secondary, Redis (JSON) |
 | `/api/email/` | Email monitor status (`?test=1` sends a test email via ApotekApps SMTP) |
-| `/api/db-sizes/` | Storage & database sizes (JSON) |
 | `/api/ai-insight/` | AI infrastructure insight (JSON) |
 | `/api/ai-chat/` | AI chat assistant (JSON) |
 | `/api/config/save/` | Save connection/AI config |
 | `/api/config/apotek-email/` | Email config mirrored from ApotekApps (JSON) |
 | `/api/network/stream/` | **Live network stream (SSE)** |
 | `/api/alerts/` | Alerts + unread count (JSON) |
+| `/api/db-vacuum/` | `VACUUM FULL` on PostgreSQL Primary |
+| `/api/db-vacuum-secondary/` | `VACUUM FULL` on PostgreSQL Secondary |
+| `/api/db-vacuum-analyze/<db>/` | `VACUUM ANALYZE` (db = `primary` \| `secondary`) |
+| `/api/db-reindex/<db>/` | `REINDEX` (Primary \| Secondary) |
+| `/api/db-analyze/<db>/` | `ANALYZE` (Primary \| Secondary) |
+| `/api/db-backup/<db>/` | `pg_dump` backup (Primary \| Secondary) |
+| `/api/db-sqlite-vacuum/` | `VACUUM` on Monitor SQLite |
+| `/api/db-redis-flushdb/` | `FLUSHDB` on Redis |
 | `/webhook/receive/` | Receive webhook events (POST) |
 | `/login/` | Login page |
 | `/admin/` | Django admin |
@@ -201,6 +215,24 @@ Network data is streamed **live** via SSE at `/api/network/stream/`:
 - **New webhook** → a packet travels along edge `apps_api → monitor` (purple).
 
 The **Network Stream** side panel shows a summary (total packets, packets/sec, requests, webhooks) and a live event feed. The server uses `StreamingHttpResponse` with `text/event-stream` — no extra dependencies. The connection auto-reconnects if it drops.
+
+### Topology layers
+
+The smartscape maps real dependencies between the layers:
+
+```
+WAF → Ingress → Nginx → ApotekApps API → PostgreSQL Primary · PostgreSQL Secondary
+                                            ↓                (DB)      (replica)
+                                         Redis Cache       ↗
+                                            ↓
+                                      Media Storage
+                                            ↓
+                                   Python Runtime → System Host
+```
+
+- **WAF / Ingress** — front of the stack; probed live and drawn as `waf → ingress → nginx → apps_api`.
+- **PostgreSQL Primary (:5006)** and **PostgreSQL Secondary (:5008)** — both probed and sized; the secondary is monitored as a replica edge (`pg_secondary → apps_api`).
+- **Member** — loyalty node showing member count & total poin read from PostgreSQL Primary.
 
 ### Email Monitoring
 
@@ -222,6 +254,14 @@ python manage.py simulate_traffic            # ~2 events/sec, runs until stopped
 python manage.py simulate_traffic --rate 5   # 5 events/sec
 python manage.py simulate_traffic --duration 120  # stop after 120 seconds
 ```
+
+---
+
+## Database Maintenance
+
+`/maintenance/` and the Storage & Database panel offer maintenance for every store. Each PostgreSQL / Redis action opens its own autocommit connection (so `VACUUM FULL` runs outside a transaction block). Actions run against the **Primary** or **Secondary** PostgreSQL as configured in `ApotekApps/.env`.
+
+> ⚠️ `VACUUM FULL` takes an `ACCESS EXCLUSIVE` lock on every table for the whole operation (blocking reads/writes). Run it during a quiet window, or prefer `VACUUM ANALYZE` / `ANALYZE` for routine upkeep.
 
 ---
 
@@ -263,6 +303,7 @@ The event is stored in `WebhookEvent` and shown on `/webhooks/`, and it also flo
 - **HTTP Client** — requests + urllib3 Retry
 - **Auth** — Django session (monitor) + auto-managed JWT (ApotekApps API) + ApotekApps credential login
 - **Realtime** — Server-Sent Events (SSE) via `StreamingHttpResponse`
+- **Database drivers** — psycopg3 (`psycopg`) with a psycopg2 fallback
 - **AI** — OpenAI-compatible router (chat + infrastructure insight)
 - **Frontend** — Django templates, Chart.js 4.4, Font Awesome 6.5, vanilla JS (SVG smartscape)
 - **Icons** — Simple Icons brand SVGs (PostgreSQL/Redis/SQLite/Nginx) + Font Awesome
