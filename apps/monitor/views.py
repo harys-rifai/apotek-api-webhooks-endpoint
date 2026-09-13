@@ -1,5 +1,7 @@
 import json
+import time
 from datetime import timedelta
+from functools import wraps
 
 import urllib.error as urllib_error
 import urllib.request as urllib_request
@@ -12,6 +14,36 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.conf import settings
+
+
+# ── TTL cache for infra probes ─────────────────────────────────────────────────
+# Probes hit the network/disk/subprocess and can block for seconds. The topology
+# page polls api_topology_json every 10 s AND api_ai_insight runs the same probes
+# via _infra_health(), so results are cached briefly to avoid duplicate work
+# within the same polling cycle.
+_probe_cache: dict = {}
+_PROBE_TTL = 5  # seconds
+
+
+def _ttl_cache(ttl=_PROBE_TTL):
+    """Cache a no-/simple-arg function's return for *ttl* seconds.
+
+    Keyed by function name + repr(args) so functions with different config
+    dicts (e.g. _probe_postgres primary vs secondary) get separate entries.
+    """
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            key = (fn.__name__, repr(args), repr(sorted(kwargs.items())))
+            entry = _probe_cache.get(key)
+            now = time.monotonic()
+            if entry and entry[0] > now:
+                return entry[1]
+            result = fn(*args, **kwargs)
+            _probe_cache[key] = (now + ttl, result)
+            return result
+        return wrapper
+    return deco
 
 from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
                       AiInsight, NodeLayout, AIConfig, AIChatLog,
