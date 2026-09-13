@@ -89,11 +89,58 @@ APOTEK_API_BASE_URL=http://127.0.0.1:8000/api
 # Credentials used to obtain an ApotekApps token for monitoring
 APOTEK_ADMIN_USERNAME=admin
 APOTEK_ADMIN_PASSWORD=admin
+
+# PostgreSQL backup replica (auto-detected if omitted)
+DB_ENGINE=django.db.backends.postgresql
+DB_NAME=apotek_pos
+DB_USER=postgres
+DB_PASSWORD=Password09!
+DB_HOST=localhost
+DB_PORT=5006
 ```
 
 > Email/SMTP configuration is **not** stored here — it is read automatically from ApotekApps (`/api/common/system-status/` & `/api/common/system-config/`).
 >
 > PostgreSQL Primary / Secondary connection is read from `ApotekApps/.env` (`DB_*` / `STANDBY_DB_*`), with optional overrides on the **Config** page.
+
+---
+
+## PostgreSQL Port Auto-Failover
+
+If the primary PostgreSQL port (5006) goes down, ApotekMonitor automatically
+swings to the next available port in priority order:
+
+```
+5006 (primary) → 5008 (secondary) → 5007 → 5009 → 5432 (default)
+```
+
+**How it works:**
+
+1. **At startup** (`run.sh` / `run.bat`): the script probes each port by
+   attempting a real PostgreSQL connection. The first reachable port is written
+   to `.env` as `DB_PORT`.
+
+2. **In settings.py**: `config/db_port_manager.py` reads `.env` and performs
+   the same port detection at settings load time, configuring
+   `DATABASES["backup_pg"]` with the working port.
+
+3. **At runtime** (`DBHealthMiddleware`): if a request raises
+   `OperationalError` on `backup_pg`, the middleware tries failover ports,
+   updates `.env`, and retries the request once.
+
+4. **`.env` ↔ table sync**: the `ConnectionConfig` table (editable via the
+   **Config** page) is the source of truth once populated. `db_sync_config`
+   syncs the detected port there. `db_failover` does manual health checks.
+
+**Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `python manage.py db_sync_config` | Detect active PG port, update `.env` + `ConnectionConfig` table |
+| `python manage.py db_sync_config --force` | Re-detect even if current port is reachable |
+| `python manage.py db_sync_config --dry-run` | Detect and print only; no writes |
+| `python manage.py db_failover` | Check current port; failover if down |
+| `python manage.py db_failover --list` | List which PG ports are reachable |
 
 ---
 

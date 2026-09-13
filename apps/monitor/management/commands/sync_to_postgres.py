@@ -3,12 +3,17 @@ Backup-plan: sinkronkan data Monitor (SQLite) ke PostgreSQL (ApotekApps).
 
 Menyalin tabel Alert, AiInsight, dan NodeLayout ke schema `monitor_backup`
 di PostgreSQL lewat alias DATABASES['backup_pg'] (otomatis aktif bila
-ApotekApps/.env berisi kredensial DB_*). Setiap baris di-upsert berdasarkan
+ApotekApps/.env berisi kredenserial DB_*). Setiap baris di-upsert berdasarkan
 `sync_key` stabil sehingga aman dijalankan berkala (cron / manual).
+
+Auto-failover: pada saat connect, command memastikan port PG yang terkonfigurasi
+di .env masih hidup. Jika mati, otomatis mencoba port cadangan lainnya
+(5006 → 5008 → 5007 → 5009 → 5432) dan memperbarui .env + ConnectionConfig.
 
 Jalankan:
     python manage.py sync_to_postgres            # sinkron sekali
     python manage.py sync_to_postgres --clear    # hapus dulu isi tabel backup
+    python manage.py db_sync_config              # detect + sync port to .env & table
 """
 import json
 
@@ -84,6 +89,43 @@ class Command(BaseCommand):
                 "Backup PostgreSQL tidak terkonfigurasi. Pastikan ApotekApps/.env "
                 "memiliki DB_HOST/DB_NAME/DB_USER/DB_PASSWORD agar alias "
                 "DATABASES['backup_pg'] aktif."
+            )
+            return
+
+        # Verify the configured PG port is reachable; failover if not.
+        from config.db_port_manager import try_pg_connect, update_env_port, _find_env_file, DEFAULT_PORTS
+
+        db_cfg = connections.databases["backup_pg"]
+        host = db_cfg.get("HOST", "localhost")
+        user = db_cfg.get("USER", "postgres")
+        password = db_cfg.get("PASSWORD", "")
+        db_name = db_cfg.get("NAME", "apotek_pos")
+        current_port_str = db_cfg.get("PORT", "5432")
+        try:
+            current_port = int(current_port_str)
+        except (ValueError, TypeError):
+            current_port = 5432
+
+        ports_to_try = list(DEFAULT_PORTS)
+        if current_port not in ports_to_try:
+            ports_to_try.insert(0, current_port)
+
+        connected = False
+        for port in ports_to_try:
+            if try_pg_connect(host, port, user, password, db_name, timeout=3):
+                if port != current_port:
+                    self.stdout.write(f"Failover: {current_port} → {port}")
+                    db_cfg["PORT"] = str(port)
+                    connections["backup_pg"].close_if_unusable_or_obsolete()
+                    env_path = _find_env_file()
+                    if env_path:
+                        update_env_port(env_path, port)
+                connected = True
+                break
+
+        if not connected:
+            self.stderr.write(
+                "Tidak dapat terhubung ke PostgreSQL di semua port yang dicoba."
             )
             return
 

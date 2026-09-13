@@ -1,6 +1,10 @@
 from pathlib import Path
 from decouple import config
 
+import logging as _logging
+
+_logger = _logging.getLogger("db_port_manager")
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY", default="dev-secret-key-not-for-production")
@@ -25,6 +29,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "config.db_health_middleware.DBHealthMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -62,23 +67,35 @@ DATABASES = {
 }
 
 # Optional backup replica (ApotekApps PostgreSQL). Activated automatically when
-# ApotekApps/.env exposes DB_* credentials. Used by `sync_to_postgres`.
+# ApotekApps/.env exposes DB_* credentials. Uses db_port_manager for automatic
+# port failover: tries 5006 (primary) → 5008 (secondary) → 5007/5009/5432.
 try:
-    import os as _os
-    from decouple import Config as _Cfg, RepositoryEnv as _RepoEnv
-    _apps_env = _os.path.join(_os.path.dirname(str(BASE_DIR)), "ApotekApps", ".env")
-    if _os.path.exists(_apps_env):
-        _c = _Cfg(_RepoEnv(_apps_env))
-        DATABASES["backup_pg"] = {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": _c.get("DB_NAME", "apotek_pos"),
-            "USER": _c.get("DB_USER", "postgres"),
-            "PASSWORD": _c.get("DB_PASSWORD", ""),
-            "HOST": _c.get("DB_HOST", "localhost"),
-            "PORT": _c.get("DB_PORT", "5432"),
-        }
-except Exception:
-    pass
+    from config.db_port_manager import get_pg_config, update_env_port, _find_env_file
+
+    _env_path = _find_env_file()
+    _pg_config = get_pg_config()
+    DATABASES["backup_pg"] = _pg_config
+
+    # Persist the detected active port back to .env so subsequent runs
+    # and other tools (ensure_db.py, sync_to_postgres) read the same value.
+    if _env_path:
+        _detected_port = _pg_config.get("PORT", "")
+        _current_port = ""
+        try:
+            for _line in _env_path.read_text().splitlines():
+                if _line.strip().startswith("DB_PORT="):
+                    _current_port = _line.split("=", 1)[1].strip()
+                    break
+        except OSError:
+            pass
+        if _detected_port and _current_port != _detected_port:
+            update_env_port(_env_path, _detected_port)
+            _logger.warning(
+                "DB_PORT changed %s → %s in .env (auto-failover)",
+                _current_port or "unset", _detected_port,
+            )
+except Exception as _e:
+    _logger.error("Could not configure backup_pg: %s", _e)
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
