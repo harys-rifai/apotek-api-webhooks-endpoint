@@ -41,13 +41,13 @@
             <th>Action</th>
             <th>Detail</th>
             <th>SQL</th>
-            <th class="col-action">Eksekusi</th>
           </tr>
         </thead>
         <tbody id="scSuggestionsBody">
-          <tr><td colspan="6" style="text-align:center;opacity:.5">Memuat…</td></tr>
+          <tr><td colspan="5" style="text-align:center;opacity:.5">Memuat…</td></tr>
         </tbody>
       </table>
+      <div style="margin-top:.5rem" id="scSuggestionsPagination"></div>
     </div>
   </div>
 
@@ -56,6 +56,7 @@
     <div class="card__header cfg-toggle" data-target="body-queries" style="cursor:pointer">
       <h2 class="card__title"><i class="fa-solid fa-bug" style="color:#ff4d6d"></i> Query Lambat (pg_stat_statements)</h2>
       <span class="card__header-right">
+        <span id="scQueriesPageInfo"></span>
         <i class="fa-solid fa-chevron-down cfg-chevron"></i>
       </span>
     </div>
@@ -77,6 +78,7 @@
           <tr><td colspan="7" style="text-align:center;opacity:.5">Memuat…</td></tr>
         </tbody>
       </table>
+      <div style="margin-top:.5rem" id="scQueriesPagination"></div>
     </div>
   </div>
 
@@ -85,6 +87,7 @@
     <div class="card__header cfg-toggle" data-target="body-tables" style="cursor:pointer">
       <h2 class="card__title"><i class="fa-solid fa-table" style="color:var(--neon-magenta)"></i> Statistik Tabel</h2>
       <span class="card__header-right">
+        <span id="scTablesPageInfo"></span>
         <i class="fa-solid fa-chevron-down cfg-chevron"></i>
       </span>
     </div>
@@ -105,6 +108,7 @@
           <tr><td colspan="7" style="text-align:center;opacity:.5">Memuat…</td></tr>
         </tbody>
       </table>
+      <div style="margin-top:.5rem" id="scTablesPagination"></div>
     </div>
   </div>
 
@@ -113,6 +117,7 @@
     <div class="card__header cfg-toggle" data-target="body-indexes" style="cursor:pointer">
       <h2 class="card__title"><i class="fa-solid fa-cubes" style="color:var(--neon-cyan)"></i> Indeks</h2>
       <span class="card__header-right">
+        <span id="scIndexesPageInfo"></span>
         <i class="fa-solid fa-chevron-down cfg-chevron"></i>
       </span>
     </div>
@@ -132,6 +137,7 @@
           <tr><td colspan="6" style="text-align:center;opacity:.5">Memuat…</td></tr>
         </tbody>
       </table>
+      <div style="margin-top:.5rem" id="scIndexesPagination"></div>
     </div>
   </div>
 
@@ -142,6 +148,8 @@
 <script>
 (function () {
   var currentDb = 'primary';
+  var currentPage = 1;
+  var perPage = 5;
 
   function getCookie(name) {
     var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
@@ -177,6 +185,29 @@
     return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  function renderPagination(elId, section, pg, currentCount) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    var totalKey = 'total_' + section;
+    var total = pg[totalKey] || 0;
+    var pageInfo = pg.page || 1;
+    var pp = pg.per_page || perPage;
+    var totalPages = Math.ceil(total / pp);
+    el.innerHTML = '';
+    if (total <= pp) return;
+    var end = Math.min(pageInfo * pp, total);
+    var html = '<span style="opacity:.7;font-size:.78rem;margin-right:.5rem">' +
+      ((pageInfo - 1) * pp + 1) + '-' + end + ' dari ' + total + '</span>';
+    if (pageInfo > 1) {
+      html += '<button type="button" class="btn btn-outline btn-xs" onclick="window.scGoPage(' + (pageInfo - 1) + ')">Prev</button>';
+    }
+    html += ' <span style="opacity:.7;font-size:.78rem;margin:0 .3rem">Hal ' + pageInfo + '/' + totalPages + '</span>';
+    if (pageInfo < totalPages) {
+      html += '<button type="button" class="btn btn-outline btn-xs" onclick="window.scGoPage(' + (pageInfo + 1) + ')">Next</button>';
+    }
+    el.innerHTML = html;
+  }
+
   async function refresh() {
     var db = currentDb;
     var btn = document.getElementById('scRefreshBtn');
@@ -186,7 +217,9 @@
     setStatus('idle', 'memindai…');
 
     try {
-      var r = await fetch('/api/slow-queries/?db=' + encodeURIComponent(db), { headers: headers() });
+      var r = await fetch('/api/slow-queries/?db=' + encodeURIComponent(db) +
+                          '&page=' + currentPage + '&per_page=' + perPage,
+                          { headers: headers() });
       var d = await r.json();
 
       if (!d.connected) {
@@ -214,11 +247,12 @@
       // Queries
       var qbody = document.getElementById('scQueriesBody');
       qbody.innerHTML = '';
+      var qOffset = (currentPage - 1) * perPage;
       if (d.queries && d.queries.length) {
         d.queries.forEach(function (q, i) {
           var cls = q.mean_ms > 500 ? 'table--row-critical' : q.mean_ms > 200 ? 'table--row-warn' : '';
           qbody.innerHTML += '<tr class="' + cls + '">' +
-            '<td>' + (i + 1) + '</td>' +
+            '<td>' + (qOffset + i + 1) + '</td>' +
             '<td>' + q.mean_ms + ' ms</td>' +
             '<td>' + q.total_ms + '</td>' +
             '<td>' + fmt(q.calls) + '</td>' +
@@ -230,6 +264,7 @@
       } else {
         qbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5">Tidak ada data (extension tidak aktif atau belum ada traffic)</td></tr>';
       }
+      renderPagination('scQueriesPagination', 'queries', d.pagination, d.queries.length);
 
       // Tables
       var tbody = document.getElementById('scTablesBody');
@@ -250,6 +285,7 @@
       } else {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5">Tidak ada data tabel</td></tr>';
       }
+      renderPagination('scTablesPagination', 'tables', d.pagination, d.tables.length);
 
       // Indexes
       var ibody = document.getElementById('scIndexesBody');
@@ -269,35 +305,40 @@
       } else {
         ibody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5">Tidak ada data indeks</td></tr>';
       }
+      renderPagination('scIndexesPagination', 'indexes', d.pagination, d.indexes.length);
 
       // Suggestions
       var sbody = document.getElementById('scSuggestionsBody');
       var sugCount = document.getElementById('scSugCount');
       sbody.innerHTML = '';
       if (d.suggestions && d.suggestions.length) {
-        sugCount.textContent = d.suggestions.length;
+        sugCount.textContent = d.pagination.total_suggestions || d.suggestions.length;
         sugCount.className = 'status-badge status-badge--warn';
-        d.suggestions.forEach(function (s) {
+        var sOffset = (currentPage - 1) * perPage;
+        d.suggestions.forEach(function (s, i) {
           var sevCls = s.severity === 'warning' ? 'table--row-warn' : s.severity === 'critical' ? 'table--row-critical' : '';
+          var actionBtn = (s.action === 'VACUUM' || s.action === 'ANALYZE') ?
+            '<button type="button" class="btn btn-outline btn-xs run-maint" data-action="' + s.type + '" data-table="' + escapeHtml(s.table) + '">' +
+              '<i class="fa-solid fa-play"></i> Jalankan' +
+            '</button>' : '';
           sbody.innerHTML += '<tr class="' + sevCls + '">' +
-            '<td>' + escapeHtml(s.type) + '</td>' +
-            '<td>' + escapeHtml(s.table || '—') + '</td>' +
-            '<td>' + escapeHtml(s.action) + '</td>' +
-            '<td>' + escapeHtml(s.detail) + '</td>' +
-            '<td><pre class="query-text">' + escapeHtml(s.sql || '') + '</pre></td>' +
-            '<td class="col-action">' +
-              (s.action === 'VACUUM' || s.action === 'ANALYZE' ?
-                '<button type="button" class="btn btn-outline btn-xs run-maint" data-action="' + s.type + '" data-table="' + escapeHtml(s.table) + '">' +
-                  '<i class="fa-solid fa-play"></i> Jalankan' +
-                '</button>' : '') +
-            '</td>' +
+            '<td style="white-space:nowrap">' + escapeHtml(s.type) + '</td>' +
+            '<td style="white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(s.table || '—') + '</td>' +
+            '<td style="white-space:nowrap">' + escapeHtml(s.action) + (actionBtn ? ' ' + actionBtn : '') + '</td>' +
+            '<td style="max-width:300px;word-wrap:break-word;word-break:break-word">' + escapeHtml(s.detail) + '</td>' +
+            '<td><pre class="query-text" style="max-width:300px;max-height:80px;overflow:auto">' + escapeHtml(s.sql || '') + '</pre></td>' +
             '</tr>';
         });
       } else {
         sugCount.textContent = '0';
         sugCount.className = 'status-badge status-badge--ok';
-        sbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5">Tidak ada saran. Database sehat.</td></tr>';
+        sbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5">Tidak ada saran. Database sehat.</td></tr>';
       }
+      renderPagination('scSuggestionsPagination', 'suggestions', {
+        page: currentPage,
+        per_page: perPage,
+        total_suggestions: d.suggestions.length
+      }, d.suggestions.length);
 
       // Wire up maintenance buttons
       document.querySelectorAll('.run-maint').forEach(function (btn2) {
@@ -352,6 +393,7 @@
   if (dbSel) {
     dbSel.addEventListener('change', function () {
       currentDb = dbSel.value;
+      currentPage = 1;
       refresh();
     });
   }
@@ -363,6 +405,11 @@
   // Auto-refresh every 30s
   refresh();
   setInterval(refresh, 30000);
+
+  window.scGoPage = function (page) {
+    currentPage = page;
+    refresh();
+  };
 })();
 </script>
 {% endblock %}

@@ -2718,6 +2718,20 @@ def _query_index_stats(cur):
     return results
 
 
+def _is_safe_to_drop_index(index_name):
+    """Check if an index is safe to suggest dropping (not a PK or unique constraint)."""
+    if not index_name:
+        return False
+    lower = index_name.lower()
+    # Never suggest dropping primary keys or unique constraint indexes
+    if lower.endswith("_pkey") or lower.endswith("_key"):
+        return False
+    # Skip indexes that start with common PK/UK patterns
+    if lower.startswith("auth_") and ("_pkey" in lower or "_key" in lower):
+        return False
+    return True
+
+
 def _build_suggestions(queries, tables, indexes):
     """Generate maintenance suggestions from probe data."""
     suggestions = []
@@ -2727,7 +2741,7 @@ def _build_suggestions(queries, tables, indexes):
         if q["mean_ms"] > 500:
             suggestions.append({
                 "type": "slow_query",
-                "severity": "warning",
+                "severity": "critical" if q["mean_ms"] > 2000 else "warning",
                 "table": None,
                 "action": "EXPLAIN ANALYZE",
                 "detail": f"Query mean {q['mean_ms']}ms over {q['calls']} calls. "
@@ -2764,12 +2778,14 @@ def _build_suggestions(queries, tables, indexes):
                     "sql": f"ANALYZE \"{t['schema']}\".\"{t['table']}\";",
                 })
 
-    # 4. Unused indexes → suggest DROP
+    # 4. Unused indexes → suggest DROP (skip PKs and unique constraints)
     for idx in indexes:
-        if idx["unused"] and idx["idx_tup_read"] == 0 and idx["idx_tup_fetch"] == 0:
+        if (idx["unused"] and idx["idx_tup_read"] == 0
+                and idx["idx_tup_fetch"] == 0
+                and _is_safe_to_drop_index(idx["index"])):
             suggestions.append({
                 "type": "unused_index",
-                "severity": "info",
+                "severity": idx["unused"] and idx.get("idx_scan", 0) == 0 and "info",
                 "table": f"{idx['schema']}.{idx['table']}",
                 "action": "DROP INDEX",
                 "detail": f"Index '{idx['index']}' has never been scanned. "
@@ -2789,6 +2805,10 @@ def _build_suggestions(queries, tables, indexes):
                           f"{t['idx_scan']} idx scans, reading {t['seq_tup_read']} rows. "
                           f"An index would reduce sequential scans.",
             })
+
+    # Sort: critical first, then warning, then info
+    severity_order = {"critical": 0, "warning": 1, "info": 2}
+    suggestions.sort(key=lambda s: (severity_order.get(s["severity"], 99), len(s.get("detail", ""))))
 
     return suggestions
 
@@ -2818,10 +2838,18 @@ def slow_connection_view(request):
 def api_slow_queries(request):
     """Return slow-query analysis via pg_stat_statements + table/index stats + suggestions.
 
-    Query param ``db`` — ``primary`` (default) or ``secondary`` selects which
-    PostgreSQL instance to analyze.
+    Query params:
+        db       — ``primary`` (default) or ``secondary`` selects which PostgreSQL.
+        page     — page number for paginated results (default 1).
+        per_page — items per page (default 5).
     """
     db = request.GET.get("db", "primary")
+    page = int(request.GET.get("page", 1))
+    per_page = int(request.GET.get("per_page", 5))
+    if per_page > 50:
+        per_page = 50
+    if page < 1:
+        page = 1
     primary_cfg, secondary_cfg = _get_both_postgres_configs()
     cfg = primary_cfg if db == "primary" else secondary_cfg
 
@@ -2836,6 +2864,13 @@ def api_slow_queries(request):
         "tables": [],
         "indexes": [],
         "suggestions": [],
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total_queries": 0,
+            "total_tables": 0,
+            "total_indexes": 0,
+        },
         "error": None,
         "server_time": timezone.now().isoformat(),
     }
@@ -2860,14 +2895,31 @@ def api_slow_queries(request):
                                    "Enable with: CREATE EXTENSION pg_stat_statements")
 
             if result["pg_statements_enabled"]:
-                result["queries"] = _query_pg_stat_statements(cur)
+                all_queries = _query_pg_stat_statements(cur)
+            else:
+                all_queries = []
 
-            result["tables"] = _query_table_stats(cur)
-            result["indexes"] = _query_index_stats(cur)
+            all_tables = _query_table_stats(cur)
+            all_indexes = _query_index_stats(cur)
 
         result["connected"] = True
-        result["suggestions"] = _build_suggestions(
-            result["queries"], result["tables"], result["indexes"])
+
+        result["pagination"]["total_queries"] = len(all_queries)
+        result["pagination"]["total_tables"] = len(all_tables)
+        result["pagination"]["total_indexes"] = len(all_indexes)
+
+        def _paginate(items):
+            s = (page - 1) * per_page
+            e = s + per_page
+            return items[s:e]
+
+        all_suggestions = _build_suggestions(all_queries, all_tables, all_indexes)
+        result["pagination"]["total_suggestions"] = len(all_suggestions)
+
+        result["queries"] = _paginate(all_queries)
+        result["tables"] = _paginate(all_tables)
+        result["indexes"] = _paginate(all_indexes)
+        result["suggestions"] = _paginate(all_suggestions)
     except Exception as e:
         result["error"] = str(e)
     finally:
