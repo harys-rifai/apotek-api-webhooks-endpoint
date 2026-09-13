@@ -26,6 +26,23 @@
     color: var(--color-muted, #8a8aa0);
     font-size: .72rem;
   }
+  .maint-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    font-size: .68rem;
+    font-weight: 500;
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .status-dot.healthy { background: #36ff9e; box-shadow: 0 0 6px #36ff9e; }
+  .status-dot.warning { background: #ffaa00; box-shadow: 0 0 6px #ffaa00; }
+  .status-dot.critical { background: #ff4d6d; box-shadow: 0 0 6px #ff4d6d; }
+  .status-dot.unknown { background: #8a8aa0; }
   .maint-actions {
     display: flex;
     flex-wrap: wrap;
@@ -84,12 +101,23 @@
       <h1 class="page__title"><i class="fa-solid fa-database"></i> Database Maintenance</h1>
       <p class="page__sub">Backup, VACUUM FULL, REINDEX, ANALYZE untuk semua database.</p>
     </div>
+    <div class="page__actions">
+      <button class="btn btn--secondary" onclick="refreshAllStatus()">
+        <i class="fa-solid fa-rotate"></i> Refresh Status
+      </button>
+    </div>
   </div>
 
   <div class="maint-grid">
     <div class="maint-card">
       <h2><i class="fa-solid fa-hard-drive"></i> SQLite</h2>
       <p class="maint-meta">Monitor</p>
+      <p class="maint-meta">
+        <span class="maint-status">
+          <span class="status-dot {{ db_status.sqlite.status|default:'unknown' }}"></span>
+          {{ db_status.sqlite.human|default:'n/a' }} · {{ db_status.sqlite.tables|default:'?' }} tables
+        </span>
+      </p>
       <div class="maint-actions">
         <button class="btn btn--primary" onclick="runMaint(this, 'sqlite', 'vacuum')">
           <i class="fa-solid fa-wind"></i> VACUUM
@@ -99,21 +127,27 @@
 
     <div class="maint-card">
       <h2><i class="fa-solid fa-database"></i> PostgreSQL Primary</h2>
-      <p class="maint-meta">PostgreSQL 18 :5006 · apotek_pos</p>
+      <p class="maint-meta">{{ db_status.postgres.host|default:'localhost' }}:{{ db_status.postgres.port|default:'5006' }} · {{ db_status.postgres.name|default:'apotek_pos' }}</p>
+      <p class="maint-meta">
+        <span class="maint-status">
+          <span class="status-dot {{ db_status.postgres.status|default:'unknown' }}"></span>
+          {{ db_status.postgres.human|default:'n/a' }} · {{ db_status.postgres.tables|default:'?' }} tables
+        </span>
+      </p>
       <div class="maint-actions">
-        <button class="btn btn--primary" onclick="runMaint(this, 'pg', 'vacuum_full')">
+        <button class="btn btn--primary" onclick="runMaint(this, 'pg', 'vacuum_full')" {% if db_status.postgres.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-wind"></i> VACUUM FULL
         </button>
-        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'vacuum_analyze')">
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'vacuum_analyze')" {% if db_status.postgres.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-magnifying-glass-chart"></i> VACUUM ANALYZE
         </button>
-        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'reindex')">
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'reindex')" {% if db_status.postgres.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-list-ol"></i> REINDEX
         </button>
-        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'analyze')">
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg', 'analyze')" {% if db_status.postgres.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-chart-bar"></i> ANALYZE
         </button>
-        <button class="btn btn--success" onclick="runMaint(this, 'pg', 'backup')">
+        <button class="btn btn--success" onclick="runMaint(this, 'pg', 'backup')" {% if db_status.postgres.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-download"></i> Backup
         </button>
       </div>
@@ -121,21 +155,27 @@
 
     <div class="maint-card">
       <h2><i class="fa-solid fa-database"></i> PostgreSQL Secondary</h2>
-      <p class="maint-meta">PostgreSQL 18 :5008 · apotek_pos</p>
+      <p class="maint-meta">{{ db_status.postgres_secondary.host|default:'localhost' }}:{{ db_status.postgres_secondary.port|default:'5008' }} · {{ db_status.postgres_secondary.name|default:'apotek_pos' }}</p>
+      <p class="maint-meta">
+        <span class="maint-status">
+          <span class="status-dot {{ db_status.postgres_secondary.status|default:'unknown' }}"></span>
+          {{ db_status.postgres_secondary.human|default:'n/a' }} · {{ db_status.postgres_secondary.tables|default:'?' }} tables
+        </span>
+      </p>
       <div class="maint-actions">
-        <button class="btn btn--primary" onclick="runMaint(this, 'pg_secondary', 'vacuum_full')">
+        <button class="btn btn--primary" onclick="runMaint(this, 'pg_secondary', 'vacuum_full')" {% if db_status.postgres_secondary.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-wind"></i> VACUUM FULL
         </button>
-        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'vacuum_analyze')">
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'vacuum_analyze')" {% if db_status.postgres_secondary.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-magnifying-glass-chart"></i> VACUUM ANALYZE
         </button>
-        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'reindex')">
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'reindex')" {% if db_status.postgres_secondary.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-list-ol"></i> REINDEX
         </button>
-        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'analyze')">
+        <button class="btn btn--secondary" onclick="runMaint(this, 'pg_secondary', 'analyze')" {% if db_status.postgres_secondary.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-chart-bar"></i> ANALYZE
         </button>
-        <button class="btn btn--success" onclick="runMaint(this, 'pg_secondary', 'backup')">
+        <button class="btn btn--success" onclick="runMaint(this, 'pg_secondary', 'backup')" {% if db_status.postgres_secondary.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-download"></i> Backup
         </button>
       </div>
@@ -143,9 +183,15 @@
 
     <div class="maint-card">
       <h2><i class="fa-solid fa-cube"></i> Redis Cache</h2>
-      <p class="maint-meta">127.0.0.1:6379 · db4</p>
+      <p class="maint-meta">{{ db_status.redis.host|default:'127.0.0.1' }}:{{ db_status.redis.port|default:'6379' }} · db{{ db_status.redis.db|default:'0' }}</p>
+      <p class="maint-meta">
+        <span class="maint-status">
+          <span class="status-dot {{ db_status.redis.status|default:'unknown' }}"></span>
+          {{ db_status.redis.detail|default:'n/a' }}
+        </span>
+      </p>
       <div class="maint-actions">
-        <button class="btn btn--danger" onclick="runMaint(this, 'redis', 'flushdb')">
+        <button class="btn btn--danger" onclick="runMaint(this, 'redis', 'flushdb')" {% if db_status.redis.status|default:'unknown' == 'critical' %}disabled{% endif %}>
           <i class="fa-solid fa-broom"></i> FLUSHDB
         </button>
       </div>
@@ -185,7 +231,49 @@ const URLS = {
   pg_backup_primary: '{% url "api_db_backup_pg" db="primary" %}',
   pg_backup_secondary: '{% url "api_db_backup_pg" db="secondary" %}',
   redis_flush: '{% url "api_db_redis_flush" %}',
+  db_sizes: '{% url "api_db_sizes" %}',
 };
+
+async function refreshAllStatus() {
+  try {
+    const res = await fetch(URLS.db_sizes);
+    if (res.ok) {
+      const data = await res.json();
+      const items = [
+        ['sqlite', '.maint-card:nth-child(1)'],
+        ['postgres', '.maint-card:nth-child(2)'],
+        ['postgres_secondary', '.maint-card:nth-child(3)'],
+        ['redis', '.maint-card:nth-child(4)'],
+      ];
+      for (const [key, sel] of items) {
+        const d = data[key];
+        if (!d) continue;
+        const card = document.querySelector(sel);
+        if (!card) continue;
+        const dot = card.querySelector('.status-dot');
+        const label = card.querySelector('.maint-status');
+        if (dot) {
+          dot.className = 'status-dot ' + (d.status || 'unknown');
+        }
+        if (label) {
+          const human = d.human || 'n/a';
+          const tables = d.tables !== null && d.tables !== undefined ? d.tables : '?';
+          let html = '<span class="status-dot ' + (d.status || 'unknown') + '"></span>';
+          if (key === 'sqlite') {
+            label.innerHTML = html + ' ' + human + ' · ' + tables + ' tables';
+          } else if (key === 'redis') {
+            label.innerHTML = html + ' ' + (d.detail || 'n/a');
+          } else {
+            label.innerHTML = html + ' ' + human + ' · ' + tables + ' tables';
+          }
+        }
+      }
+      appendTerm('<span style="color:#36ff9e">✓ Status diperbarui</span>');
+    }
+  } catch(e) {
+    appendTerm('<span style="color:#ff4d6d">✗ Gagal refresh status: ' + e.message + '</span>');
+  }
+}
 
 async function runMaint(btn, store, action) {
   let url = '';
@@ -226,6 +314,7 @@ async function runMaint(btn, store, action) {
     } else {
       appendTerm('<span style="color:#ff4d6d">✗ ' + (data.error || 'Gagal') + '</span>');
     }
+    refreshAllStatus();
   } catch (e) {
     appendTerm('<span style="color:#ff4d6d">✗ Error: ' + e.message + '</span>');
   } finally {

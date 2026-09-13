@@ -8,6 +8,7 @@ media/
 .DS_Store
 venv/
 .venv/
+.db_initialized
 
 # SQLite WAL/SHM (dihasilkan mode WAL)
 *.sqlite3-wal

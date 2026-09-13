@@ -237,7 +237,45 @@ def topology_view(request):
 
 @login_required
 def db_maintenance_view(request):
-    context = {"active_menu": "db_maintenance"}
+    # Fetch live DB/Redis status for the maintenance page
+    try:
+        from django.db import connection
+        sqlite_tables = len(connection.introspection.table_names())
+    except Exception:
+        sqlite_tables = 0
+    sqlite_path = str(settings.DATABASES.get("default", {}).get("NAME"))
+    sqlite_size = _sqlite_size(sqlite_path)
+
+    primary_cfg, secondary_cfg = _get_both_postgres_configs()
+    pg = _postgres_size(primary_cfg)
+    pg_secondary = _postgres_size(secondary_cfg)
+    redis = _redis_size()
+
+    context = {
+        "active_menu": "db_maintenance",
+        "db_status": {
+            "sqlite": {
+                "label": "SQLite (Monitor)",
+                "path": sqlite_path,
+                "bytes": sqlite_size,
+                "human": _human_size(sqlite_size),
+                "tables": sqlite_tables,
+                "status": "healthy" if sqlite_size > 0 else "warning",
+            },
+            "postgres": {
+                "label": "PostgreSQL Primary",
+                **pg,
+            },
+            "postgres_secondary": {
+                "label": "PostgreSQL Secondary",
+                **pg_secondary,
+            },
+            "redis": {
+                "label": "Redis Cache",
+                **redis,
+            },
+        },
+    }
     return render(request, "monitor/db_maintenance.html", context)
 
 
@@ -1167,6 +1205,22 @@ def _get_both_postgres_configs():
         if cc.pg_password:
             primary['password'] = cc.pg_password
             secondary['password'] = cc.pg_password
+
+    # Fix: if primary and secondary have the same port (common when ApotekApps/.env
+    # has DB_PORT=5006 in both sections), probe for the actual standby port.
+    if secondary['port'] == primary['port']:
+        from config.db_port_manager import try_pg_connect
+        for standby_port in [5008, 5007, 5009, 5432]:
+            if standby_port == primary['port']:
+                continue
+            if try_pg_connect(
+                secondary['host'], standby_port,
+                secondary['user'], secondary['password'],
+                secondary['name'], timeout=3,
+            ):
+                secondary['port'] = standby_port
+                break
+
     return primary, secondary
 
 
@@ -1332,7 +1386,7 @@ def _redis_size() -> dict:
                 "detail": f"{info['host']}:{info['port']} db{info['db']}"}
     except Exception as e:
         return {"bytes": None, "keys": None, "status": "critical",
-                "detail": f"unreachable: {e}"}
+                "detail": f"unreachable: {e}. Start Redis: sh scripts/redis.sh start"}
 
 
 def _parse_redis_url(url: str) -> dict:
@@ -1416,7 +1470,7 @@ def _probe_redis():
                 break
         return "healthy", f"PONG {latency} ms", meta
     except Exception as e:
-        return "critical", f"unreachable: {e}", meta
+        return "critical", f"unreachable: {e}. Start Redis: sh scripts/redis.sh start", meta
 
 
 def _probe_media():

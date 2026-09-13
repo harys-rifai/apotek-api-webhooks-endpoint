@@ -3,6 +3,7 @@
 <html lang="{{ LANGUAGE_CODE|default:"en-us" }}" dir="{{ LANGUAGE_BIDI|yesno:'rtl,ltr,auto' }}">
 <head>
 <title>{% block title %}{% endblock %}</title>
+<link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml"/>
 <link rel="stylesheet" href="{% block stylesheet %}{% static "admin/css/base.css" %}{% endblock %}">
 {% block dark-mode-vars %}{% comment %}gunakan tema app, nonaktifkan dark mode bawaan admin{% endcomment %}{% endblock %}
 {% if not is_popup and is_nav_sidebar_enabled %}
