@@ -6,83 +6,129 @@
 {% block content %}
 <section class="page">
   <div class="page__head">
-    <div>
-      <h1 class="page__title"><i class="fa-solid fa-sliders"></i> Config</h1>
-      <p class="page__sub">Atur koneksi database, Redis, dan AI. Perubahan disimpan &amp; langsung dipakai oleh sistem.</p>
-    </div>
-  </div>
+     <div>
+       <h1 class="page__title"><i class="fa-solid fa-sliders"></i> Config</h1>
+       <p class="page__sub">Atur koneksi database, Redis, dan AI. Perubahan disimpan &amp; langsung dipakai oleh sistem.</p>
+     </div>
+     <div class="page__actions">
+       <button type="button" class="btn btn-outline btn-sm" id="cfgRefreshAll"><i class="fa-solid fa-rotate"></i> Cek Semua</button>
+     </div>
+   </div>
 
   <div id="cfgAlert" style="display:none" class="alert" style="margin-bottom:1rem"></div>
 
   <div class="config-grid">
 
-    <!-- SQLite -->
-    <div class="card card--collapsible">
-      <div class="card__header cfg-toggle" data-target="body-sqlite">
-        <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-cyan)"></i> SQLite (Monitor)</h2>
-        <span class="card__header-right">
-          <span class="status-badge" id="status-sqlite" data-section="sqlite">—</span>
-          <i class="fa-solid fa-chevron-down cfg-chevron"></i>
-        </span>
-      </div>
-      <div class="card__body cfg-body" id="body-sqlite">
-        <form class="form cfg-form" data-section="sqlite">
-          <div class="form-group">
-            <label for="sqlite_path">Path file db.sqlite3</label>
-            <input type="text" id="sqlite_path" name="sqlite_path" class="form-control"
-                   value="{{ cfg.sqlite_path|default:sqlite_path }}" placeholder="{{ sqlite_path }}"/>
-            <small class="hint">Kosongkan untuk menggunakan default <code>{{ sqlite_path }}</code>.</small>
-          </div>
-          <div class="form-actions">
-            <button type="button" class="btn btn-outline btn-sm test-btn" data-section="sqlite"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
-            <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
-          </div>
-        </form>
-      </div>
-    </div>
+  <!-- SQLite -->
+     <div class="card card--collapsible">
+       <div class="card__header cfg-toggle" data-target="body-sqlite">
+         <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-cyan)"></i> SQLite (Monitor)</h2>
+         <span class="card__header-right">
+           <span class="status-badge" id="status-sqlite" data-section="sqlite">—</span>
+           <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+         </span>
+       </div>
+       <div class="card__body cfg-body" id="body-sqlite">
+         <form class="form cfg-form" data-section="sqlite">
+           <div class="form-group">
+             <label for="sqlite_path">Path file db.sqlite3</label>
+             <input type="text" id="sqlite_path" name="sqlite_path" class="form-control"
+                    value="{{ cfg.sqlite_path|default:sqlite_path }}" placeholder="{{ sqlite_path }}"/>
+             <small class="hint">Kosongkan untuk menggunakan default <code>{{ sqlite_path }}</code>.</small>
+           </div>
+           <div class="form-actions">
+             <button type="button" class="btn btn-outline btn-sm test-btn" data-section="sqlite"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
+             <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
+           </div>
+         </form>
+       </div>
+     </div>
 
     <!-- PostgreSQL -->
-    <div class="card card--collapsible">
-      <div class="card__header cfg-toggle" data-target="body-postgres">
-        <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-magenta)"></i> PostgreSQL (ApotekApps)</h2>
-        <span class="card__header-right">
-          <span class="status-badge" id="status-postgres" data-section="postgres">—</span>
-          <i class="fa-solid fa-chevron-down cfg-chevron"></i>
-        </span>
-      </div>
-      <div class="card__body cfg-body" id="body-postgres">
-        <form class="form cfg-form" data-section="postgres">
-          <div class="form-row">
-            <div class="form-group">
-              <label for="pg_host">Host</label>
-              <input type="text" id="pg_host" name="pg_host" class="form-control" value="{{ cfg.pg_host }}" placeholder="localhost"/>
-            </div>
-            <div class="form-group">
-              <label for="pg_port">Port</label>
-              <input type="number" id="pg_port" name="pg_port" class="form-control" value="{{ cfg.pg_port|default:'' }}" placeholder="5432"/>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="pg_name">Database</label>
-            <input type="text" id="pg_name" name="pg_name" class="form-control" value="{{ cfg.pg_name }}" placeholder="apotek_pos"/>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="pg_user">User</label>
-              <input type="text" id="pg_user" name="pg_user" class="form-control" value="{{ cfg.pg_user }}" placeholder="postgres"/>
-            </div>
-            <div class="form-group">
-              <label for="pg_password">Password</label>
-              <input type="password" id="pg_password" name="pg_password" class="form-control" placeholder="{{ cfg.mask_pg_password|default:'biarkan kosong jika tidak berubah' }}"/>
-            </div>
-          </div>
-          <div class="form-actions">
-            <button type="button" class="btn btn-outline btn-sm test-btn" data-section="postgres"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
-            <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
-          </div>
-        </form>
-      </div>
-    </div>
+     <div class="card card--collapsible">
+       <div class="card__header cfg-toggle" data-target="body-postgres">
+         <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-magenta)"></i> PostgreSQL (ApotekApps)</h2>
+         <span class="card__header-right">
+           <span class="status-badge" id="status-postgres" data-section="postgres">—</span>
+           <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+         </span>
+       </div>
+       <div class="card__body cfg-body" id="body-postgres">
+         <form class="form cfg-form" data-section="postgres">
+           <div class="form-row">
+             <div class="form-group">
+               <label for="pg_host">Host</label>
+               <input type="text" id="pg_host" name="pg_host" class="form-control" value="{{ cfg.pg_host }}" placeholder="localhost"/>
+             </div>
+             <div class="form-group">
+               <label for="pg_port">Port</label>
+               <input type="number" id="pg_port" name="pg_port" class="form-control" value="{{ cfg.pg_port|default:'' }}" placeholder="5432"/>
+             </div>
+           </div>
+           <div class="form-group">
+             <label for="pg_name">Database</label>
+             <input type="text" id="pg_name" name="pg_name" class="form-control" value="{{ cfg.pg_name }}" placeholder="apotek_pos"/>
+           </div>
+           <div class="form-row">
+             <div class="form-group">
+               <label for="pg_user">User</label>
+               <input type="text" id="pg_user" name="pg_user" class="form-control" value="{{ cfg.pg_user }}" placeholder="postgres"/>
+             </div>
+             <div class="form-group">
+               <label for="pg_password">Password</label>
+               <input type="password" id="pg_password" name="pg_password" class="form-control" placeholder="{{ cfg.mask_pg_password|default:'biarkan kosong jika tidak berubah' }}"/>
+             </div>
+           </div>
+           <div class="form-actions">
+             <button type="button" class="btn btn-outline btn-sm test-btn" data-section="postgres"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
+             <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
+           </div>
+         </form>
+       </div>
+     </div>
+
+    <!-- PostgreSQL Secondary -->
+     <div class="card card--collapsible">
+       <div class="card__header cfg-toggle" data-target="body-postgres-secondary">
+         <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-magenta)"></i> PostgreSQL Secondary</h2>
+         <span class="card__header-right">
+           <span class="status-badge" id="status-postgres-secondary" data-section="postgres_secondary">—</span>
+           <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+         </span>
+       </div>
+       <div class="card__body cfg-body" id="body-postgres-secondary">
+         <form class="form cfg-form" data-section="postgres_secondary">
+           <div class="form-row">
+             <div class="form-group">
+               <label for="pg_secondary_host">Host</label>
+               <input type="text" id="pg_secondary_host" name="pg_secondary_host" class="form-control" value="{{ cfg.pg_secondary_host }}" placeholder="localhost"/>
+             </div>
+             <div class="form-group">
+               <label for="pg_secondary_port">Port</label>
+               <input type="number" id="pg_secondary_port" name="pg_secondary_port" class="form-control" value="{{ cfg.pg_secondary_port|default:'' }}" placeholder="5008"/>
+             </div>
+           </div>
+           <div class="form-group">
+             <label for="pg_secondary_name">Database</label>
+             <input type="text" id="pg_secondary_name" name="pg_secondary_name" class="form-control" value="{{ cfg.pg_secondary_name }}" placeholder="apotek_pos"/>
+           </div>
+           <div class="form-row">
+             <div class="form-group">
+               <label for="pg_secondary_user">User</label>
+               <input type="text" id="pg_secondary_user" name="pg_secondary_user" class="form-control" value="{{ cfg.pg_secondary_user }}" placeholder="postgres"/>
+             </div>
+             <div class="form-group">
+               <label for="pg_secondary_password">Password</label>
+               <input type="password" id="pg_secondary_password" name="pg_secondary_password" class="form-control" placeholder="{{ cfg.mask_pg_secondary_password|default:'biarkan kosong jika tidak berubah' }}"/>
+             </div>
+           </div>
+           <div class="form-actions">
+             <button type="button" class="btn btn-outline btn-sm test-btn" data-section="postgres_secondary"><i class="fa-solid fa-plug-circle-check"></i> Test</button>
+             <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-save"></i> Simpan</button>
+           </div>
+         </form>
+       </div>
+     </div>
 
     <!-- Redis -->
     <div class="card card--collapsible">
@@ -308,13 +354,27 @@
   });
 
   // Cek status awal saat halaman dibuka
-  ['sqlite', 'postgres', 'redis', 'ai'].forEach(function (s) {
-    setStatus(s, 'idle', 'belum dicek');
-  });
+  var ALL_SECTIONS = ['sqlite', 'postgres', 'postgres_secondary', 'redis', 'ai', 'email'];
 
-  // Email (ApotekApps) — auto-load dari /api/common/system-status/
+  function testConnection(section) {
+    var el = document.getElementById('status-' + section);
+    if (!el) return;
+    setStatus(section, 'idle', 'menguji…');
+    fetch('/api/config/test/?section=' + encodeURIComponent(section), { headers: headers() })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        setStatus(section, d.status, d.detail || '');
+      }).catch(function () { setStatus(section, 'critical', 'gagal'); });
+  }
+
+  function testAll() {
+    ALL_SECTIONS.forEach(function (s) { testConnection(s); });
+  }
+
+  // Auto-check semua section saat halaman pertama kali dibuka
+  testAll();
+
+  // Email (ApotekApps) — auto-load form fields from /api/common/system-status/
   function loadApotekEmail() {
-    setStatus('email', 'idle', 'memuat…');
     fetch('/api/config/apotek-email/', { headers: headers() })
       .then(function (r) { return r.json(); }).then(function (d) {
         if (d.ok && d.email) {
@@ -325,19 +385,30 @@
           set('email_user', e.user || '');
           set('email_tls', e.use_tls ? 'ya' : 'tidak');
           set('email_from', e.from || '');
-          setStatus('email', 'healthy', e.host + ':' + e.port);
         } else {
           var els = ['email_host', 'email_port', 'email_user', 'email_tls', 'email_from'];
           els.forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
-          setStatus('email', 'warning', 'belum dikonfigurasi');
         }
-      }).catch(function () {
-        setStatus('email', 'critical', 'gagal membaca ApotekApps');
-      });
+      }).catch(function () {});
   }
   var emailRefreshBtn = document.getElementById('emailRefreshBtn');
   if (emailRefreshBtn) emailRefreshBtn.addEventListener('click', loadApotekEmail);
   loadApotekEmail();
+
+  // Global refresh: test-all button
+  var refreshAllBtn = document.getElementById('cfgRefreshAll');
+  if (refreshAllBtn) {
+    refreshAllBtn.addEventListener('click', function () {
+      var icon = refreshAllBtn.querySelector('i');
+      refreshAllBtn.disabled = true;
+      if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
+      testAll();
+      setTimeout(function () {
+        refreshAllBtn.disabled = false;
+        if (icon) icon.className = 'fa-solid fa-rotate';
+      }, 300);
+    });
+  }
 })();
 </script>
 {% endblock %}

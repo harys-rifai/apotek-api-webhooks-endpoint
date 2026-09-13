@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Slow Connection — OrchestrationApps{% endblock %}
+
+{% block content %}
+<section class="page">
+  <div class="page__head">
+    <div>
+      <h1 class="page__title"><i class="fa-solid fa-bolt"></i> Slow Connection</h1>
+      <p class="page__sub">Analisis query lambat, statistik tabel, dan saran maintenance dari PostgreSQL via <code>pg_stat_statements</code>.</p>
+    </div>
+    <div class="page__actions">
+      <select class="form-control form-control--sm" id="dbSelector" style="width:auto">
+        <option value="primary">PostgreSQL Primary ({{ pg_host }}:{{ pg_port }})</option>
+        <option value="secondary">PostgreSQL Secondary ({{ pg_secondary_host }}:{{ pg_secondary_port }})</option>
+      </select>
+      <button type="button" class="btn btn-outline btn-sm" id="scRefreshBtn"><i class="fa-solid fa-rotate"></i> Refresh</button>
+      <span class="status-badge" id="scStatus">—</span>
+      <span id="scUpdated" style="opacity:.6;font-size:.78rem;"></span>
+    </div>
+  </div>
+
+  <div id="scAlert" style="display:none" class="alert"></div>
+
+  <!-- Suggestions / Maintenance -->
+  <div class="card card--collapsible">
+    <div class="card__header cfg-toggle" data-target="body-suggestions">
+      <h2 class="card__title"><i class="fa-solid fa-lightbulb" style="color:var(--neon-yellow)"></i> Saran Maintenance</h2>
+      <span class="card__header-right">
+        <span class="status-badge" id="scSugCount">—</span>
+        <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+      </span>
+    </div>
+    <div class="card__body cfg-body" id="body-suggestions">
+      <table class="table table--sm" id="scSuggestionsTable">
+        <thead>
+          <tr>
+            <th>Tipe</th>
+            <th>Tabel</th>
+            <th>Action</th>
+            <th>Detail</th>
+            <th>SQL</th>
+            <th class="col-action">Eksekusi</th>
+          </tr>
+        </thead>
+        <tbody id="scSuggestionsBody">
+          <tr><td colspan="6" style="text-align:center;opacity:.5">Memuat…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Slow Queries -->
+  <div class="card card--collapsible">
+    <div class="card__header cfg-toggle" data-target="body-queries" style="cursor:pointer">
+      <h2 class="card__title"><i class="fa-solid fa-bug" style="color:#ff4d6d"></i> Query Lambat (pg_stat_statements)</h2>
+      <span class="card__header-right">
+        <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+      </span>
+    </div>
+    <div class="card__body cfg-body" id="body-queries">
+      <div class="hint" id="scPgStmtNotice" style="margin-bottom:.5rem"></div>
+      <table class="table table--sm" id="scQueriesTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Mean</th>
+            <th>Total</th>
+            <th>Calls</th>
+            <th>Rows</th>
+            <th>Hit/Read</th>
+            <th>Query</th>
+          </tr>
+        </thead>
+        <tbody id="scQueriesBody">
+          <tr><td colspan="7" style="text-align:center;opacity:.5">Memuat…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Table Stats -->
+  <div class="card card--collapsible">
+    <div class="card__header cfg-toggle" data-target="body-tables" style="cursor:pointer">
+      <h2 class="card__title"><i class="fa-solid fa-table" style="color:var(--neon-magenta)"></i> Statistik Tabel</h2>
+      <span class="card__header-right">
+        <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+      </span>
+    </div>
+    <div class="card__body cfg-body" id="body-tables">
+      <table class="table table--sm" id="scTablesTable">
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Live</th>
+            <th>Dead</th>
+            <th>Dead %</th>
+            <th>Seq Scan</th>
+            <th>Idx Scan</th>
+            <th>Modified</th>
+          </tr>
+        </thead>
+        <tbody id="scTablesBody">
+          <tr><td colspan="7" style="text-align:center;opacity:.5">Memuat…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Index Stats -->
+  <div class="card card--collapsible">
+    <div class="card__header cfg-toggle" data-target="body-indexes" style="cursor:pointer">
+      <h2 class="card__title"><i class="fa-solid fa-cubes" style="color:var(--neon-cyan)"></i> Indeks</h2>
+      <span class="card__header-right">
+        <i class="fa-solid fa-chevron-down cfg-chevron"></i>
+      </span>
+    </div>
+    <div class="card__body cfg-body" id="body-indexes">
+      <table class="table table--sm" id="scIndexesTable">
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Index</th>
+            <th>Scan</th>
+            <th>Read</th>
+            <th>Fetch</th>
+            <th>Unused</th>
+          </tr>
+        </thead>
+        <tbody id="scIndexesBody">
+          <tr><td colspan="6" style="text-align:center;opacity:.5">Memuat…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var currentDb = 'primary';
+
+  function getCookie(name) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function headers() {
+    return { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCookie('csrftoken') };
+  }
+  function showAlert(msg, type) {
+    var el = document.getElementById('scAlert');
+    el.style.display = 'block';
+    el.className = 'alert alert--' + (type || 'info');
+    el.innerHTML = '<i class="fa-solid fa-circle-info"></i> ' + msg;
+    setTimeout(function () { el.style.display = 'none'; }, 4000);
+  }
+
+  function setStatus(status, detail) {
+    var el = document.getElementById('scStatus');
+    if (!el) return;
+    var cls = status === 'healthy' || status === true ? 'ok'
+            : status === 'warning' ? 'warn'
+            : status === 'critical' ? 'err' : 'idle';
+    el.className = 'status-badge status-badge--' + cls;
+    el.textContent = status === true ? 'OK' : (detail || status);
+  }
+
+  function fmt(n) {
+    if (n == null) return '—';
+    return n.toLocaleString();
+  }
+
+  function escapeHtml(s) {
+    return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function refresh() {
+    var db = currentDb;
+    var btn = document.getElementById('scRefreshBtn');
+    var upd = document.getElementById('scUpdated');
+    btn.disabled = true;
+    btn.querySelector('i').className = 'fa-solid fa-spinner fa-spin';
+    setStatus('idle', 'memindai…');
+
+    try {
+      var r = await fetch('/api/slow-queries/?db=' + encodeURIComponent(db), { headers: headers() });
+      var d = await r.json();
+
+      if (!d.connected) {
+        setStatus('critical', d.error || 'connection failed');
+        btn.disabled = false; btn.querySelector('i').className = 'fa-solid fa-rotate';
+        upd.textContent = '';
+        return;
+      }
+
+      setStatus(true, d.name || (d.host + ':' + d.port));
+      upd.textContent = 'updated ' + new Date().toLocaleTimeString();
+
+      // pg_stat_statements notice
+      var notice = document.getElementById('scPgStmtNotice');
+      if (d.pg_statements_enabled) {
+        notice.innerHTML = '<i class="fa-solid fa-check-circle" style="color:var(--neon-green)"></i> pg_stat_statements aktif';
+        notice.style.display = 'block';
+      } else {
+        notice.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:var(--neon-yellow)"></i> ' +
+                          escapeHtml(d.error || 'pg_stat_statements belum terpasang') +
+                          ' <code>CREATE EXTENSION pg_stat_statements</code>';
+        notice.style.display = 'block';
+      }
+
+      // Queries
+      var qbody = document.getElementById('scQueriesBody');
+      qbody.innerHTML = '';
+      if (d.queries && d.queries.length) {
+        d.queries.forEach(function (q, i) {
+          var cls = q.mean_ms > 500 ? 'table--row-critical' : q.mean_ms > 200 ? 'table--row-warn' : '';
+          qbody.innerHTML += '<tr class="' + cls + '">' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td>' + q.mean_ms + ' ms</td>' +
+            '<td>' + q.total_ms + '</td>' +
+            '<td>' + fmt(q.calls) + '</td>' +
+            '<td>' + fmt(q.rows) + '</td>' +
+            '<td>' + fmt(q.shared_blks_hit) + '/' + fmt(q.shared_blks_read) + '</td>' +
+            '<td><pre class="query-text">' + escapeHtml(q.query) + '</pre></td>' +
+            '</tr>';
+        });
+      } else {
+        qbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5">Tidak ada data (extension tidak aktif atau belum ada traffic)</td></tr>';
+      }
+
+      // Tables
+      var tbody = document.getElementById('scTablesBody');
+      tbody.innerHTML = '';
+      if (d.tables && d.tables.length) {
+        d.tables.forEach(function (t) {
+          var deadCls = t.dead_ratio_pct > 50 ? 'table--row-critical' : t.dead_ratio_pct > 20 ? 'table--row-warn' : '';
+          tbody.innerHTML += '<tr class="' + deadCls + '">' +
+            '<td>' + escapeHtml(t.schema + '.' + t.table) + '</td>' +
+            '<td>' + fmt(t.n_live_tup) + '</td>' +
+            '<td>' + fmt(t.n_dead_tup) + '</td>' +
+            '<td>' + t.dead_ratio_pct + '%</td>' +
+            '<td>' + fmt(t.seq_scan) + '</td>' +
+            '<td>' + fmt(t.idx_scan) + '</td>' +
+            '<td>' + fmt(t.n_mod_since_analyze) + '</td>' +
+            '</tr>';
+        });
+      } else {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5">Tidak ada data tabel</td></tr>';
+      }
+
+      // Indexes
+      var ibody = document.getElementById('scIndexesBody');
+      ibody.innerHTML = '';
+      if (d.indexes && d.indexes.length) {
+        d.indexes.forEach(function (idx) {
+          var unusedCls = idx.unused ? 'table--row-warn' : '';
+          ibody.innerHTML += '<tr class="' + unusedCls + '">' +
+            '<td>' + escapeHtml(idx.schema + '.' + idx.table) + '</td>' +
+            '<td>' + escapeHtml(idx.index) + '</td>' +
+            '<td>' + fmt(idx.idx_scan) + '</td>' +
+            '<td>' + fmt(idx.idx_tup_read) + '</td>' +
+            '<td>' + fmt(idx.idx_tup_fetch) + '</td>' +
+            '<td>' + (idx.unused ? 'Ya' : 'Tidak') + '</td>' +
+            '</tr>';
+        });
+      } else {
+        ibody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5">Tidak ada data indeks</td></tr>';
+      }
+
+      // Suggestions
+      var sbody = document.getElementById('scSuggestionsBody');
+      var sugCount = document.getElementById('scSugCount');
+      sbody.innerHTML = '';
+      if (d.suggestions && d.suggestions.length) {
+        sugCount.textContent = d.suggestions.length;
+        sugCount.className = 'status-badge status-badge--warn';
+        d.suggestions.forEach(function (s) {
+          var sevCls = s.severity === 'warning' ? 'table--row-warn' : s.severity === 'critical' ? 'table--row-critical' : '';
+          sbody.innerHTML += '<tr class="' + sevCls + '">' +
+            '<td>' + escapeHtml(s.type) + '</td>' +
+            '<td>' + escapeHtml(s.table || '—') + '</td>' +
+            '<td>' + escapeHtml(s.action) + '</td>' +
+            '<td>' + escapeHtml(s.detail) + '</td>' +
+            '<td><pre class="query-text">' + escapeHtml(s.sql || '') + '</pre></td>' +
+            '<td class="col-action">' +
+              (s.action === 'VACUUM' || s.action === 'ANALYZE' ?
+                '<button type="button" class="btn btn-outline btn-xs run-maint" data-action="' + s.type + '" data-table="' + escapeHtml(s.table) + '">' +
+                  '<i class="fa-solid fa-play"></i> Jalankan' +
+                '</button>' : '') +
+            '</td>' +
+            '</tr>';
+        });
+      } else {
+        sugCount.textContent = '0';
+        sugCount.className = 'status-badge status-badge--ok';
+        sbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5">Tidak ada saran. Database sehat.</td></tr>';
+      }
+
+      // Wire up maintenance buttons
+      document.querySelectorAll('.run-maint').forEach(function (btn2) {
+        btn2.addEventListener('click', function () {
+          var act = btn2.dataset.action;
+          var tbl = btn2.dataset.table;
+          var actionMap = { vacuum: 'vacuum', analyze: 'analyze', missing_index: 'vacuum_analyze' };
+          var pgAction = actionMap[act] || 'vacuum';
+          var sql = pgAction === 'analyze' ? 'analyze' : 'vacuum_analyze';
+          btn2.disabled = true;
+          btn2.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>…';
+          fetch('/api/slow-maintenance/?db=' + encodeURIComponent(db), {
+            method: 'POST', headers: { 'Content-Type': 'application/json',
+             'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCookie('csrftoken') },
+            body: JSON.stringify({ action: sql, table: tbl })
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) showAlert(d.detail, 'success');
+            else showAlert('Gagal: ' + (d.error || 'unknown'), 'error');
+            btn2.disabled = false;
+            btn2.innerHTML = '<i class="fa-solid fa-play"></i> Jalankan';
+          }).catch(function () {
+            showAlert('Gagal menghubungi server.', 'error');
+            btn2.disabled = false;
+            btn2.innerHTML = '<i class="fa-solid fa-play"></i> Jalankan';
+          });
+        });
+      });
+
+    } catch (e) {
+      setStatus('critical', 'error: ' + e);
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('i').className = 'fa-solid fa-rotate';
+    }
+  }
+
+  // Collapsible cards
+  document.querySelectorAll('.cfg-toggle').forEach(function (hdr) {
+    hdr.addEventListener('click', function () {
+      var card = hdr.closest('.card--collapsible');
+      if (card) card.classList.toggle('is-collapsed');
+    });
+  });
+  // collapse all by default, expand suggestions
+  document.querySelectorAll('.card--collapsible').forEach(function (c) {
+    c.classList.add('is-collapsed');
+  });
+  document.getElementById('body-suggestions').parentElement.classList.remove('is-collapsed');
+
+  // DB selector
+  var dbSel = document.getElementById('dbSelector');
+  if (dbSel) {
+    dbSel.addEventListener('change', function () {
+      currentDb = dbSel.value;
+      refresh();
+    });
+  }
+
+  // Refresh button
+  var refreshBtn = document.getElementById('scRefreshBtn');
+  if (refreshBtn) refreshBtn.addEventListener('click', refresh);
+
+  // Auto-refresh every 30s
+  refresh();
+  setInterval(refresh, 30000);
+})();
+</script>
+{% endblock %}

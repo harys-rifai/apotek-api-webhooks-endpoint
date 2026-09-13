@@ -1,5 +1,6 @@
 import json
 import time
+import threading
 from datetime import timedelta
 from functools import wraps
 
@@ -18,11 +19,13 @@ from django.conf import settings
 
 # ── TTL cache for infra probes ─────────────────────────────────────────────────
 # Probes hit the network/disk/subprocess and can block for seconds. The topology
-# page polls api_topology_json every 10 s AND api_ai_insight runs the same probes
+# page polls api_topology_json every 5 s AND api_ai_insight runs the same probes
 # via _infra_health(), so results are cached briefly to avoid duplicate work
-# within the same polling cycle.
+# within the same polling cycle.  Double-checked locking prevents the
+# "thundering herd" problem when concurrent requests all miss the cache.
 _probe_cache: dict = {}
-_PROBE_TTL = 5  # seconds
+_probe_locks: dict = {}
+_PROBE_TTL = 10  # seconds
 
 
 def _ttl_cache(ttl=_PROBE_TTL):
@@ -39,9 +42,15 @@ def _ttl_cache(ttl=_PROBE_TTL):
             now = time.monotonic()
             if entry and entry[0] > now:
                 return entry[1]
-            result = fn(*args, **kwargs)
-            _probe_cache[key] = (now + ttl, result)
-            return result
+            lock = _probe_locks.setdefault(key, threading.Lock())
+            with lock:
+                entry = _probe_cache.get(key)
+                now = time.monotonic()
+                if entry and entry[0] > now:
+                    return entry[1]
+                result = fn(*args, **kwargs)
+                _probe_cache[key] = (now + ttl, result)
+                return result
         return wrapper
     return deco
 
@@ -386,6 +395,19 @@ def api_config_save(request):
         cc.pg_user = (data.get("pg_user") or "").strip()
         if data.get("pg_password"):
             cc.pg_password = data["pg_password"]
+    elif section == "postgres_secondary":
+        cc.pg_secondary_host = (data.get("pg_secondary_host") or "").strip()
+        if data.get("pg_secondary_port"):
+            try:
+                cc.pg_secondary_port = int(data["pg_secondary_port"])
+            except (TypeError, ValueError):
+                return JsonResponse({"error": "Port PostgreSQL Secondary harus angka."}, status=400)
+        else:
+            cc.pg_secondary_port = None
+        cc.pg_secondary_name = (data.get("pg_secondary_name") or "").strip()
+        cc.pg_secondary_user = (data.get("pg_secondary_user") or "").strip()
+        if data.get("pg_secondary_password"):
+            cc.pg_secondary_password = data["pg_secondary_password"]
     elif section == "redis":
         cc.redis_url = (data.get("redis_url") or "").strip()
     elif section == "ai":
@@ -416,6 +438,9 @@ def api_config_save(request):
             "pg_host": cc.pg_host, "pg_port": cc.pg_port,
             "pg_name": cc.pg_name, "pg_user": cc.pg_user,
             "pg_password_masked": cc.mask_pg_password(),
+            "pg_secondary_host": cc.pg_secondary_host, "pg_secondary_port": cc.pg_secondary_port,
+            "pg_secondary_name": cc.pg_secondary_name, "pg_secondary_user": cc.pg_secondary_user,
+            "pg_secondary_password_masked": cc.mask_pg_secondary_password(),
             "redis_url": cc.redis_url,
             "redis_password_masked": cc.mask_redis_password(),
             "ai_enabled": cc.ai_enabled, "ai_base_url": cc.ai_base_url,
@@ -434,6 +459,10 @@ def api_config_test(request):
 
     if section == "postgres":
         status, detail = _probe_apotek_db()
+        result.update(status=status, detail=detail)
+    elif section == "postgres_secondary":
+        _, secondary_cfg = _get_both_postgres_configs()
+        status, detail = _probe_postgres(secondary_cfg)
         result.update(status=status, detail=detail)
     elif section == "redis":
         status, detail, meta = _probe_redis()
@@ -1123,6 +1152,7 @@ def rank_free_models(model_ids):
     return free + light + other + rest
 
 
+@_ttl_cache()
 def _apotek_apps_config():
     """Read ApotekApps/.env (best-effort). Returns a getter with defaults.
 
@@ -1160,6 +1190,7 @@ def _apotek_apps_config():
     return getter
 
 
+@_ttl_cache()
 def _get_both_postgres_configs():
     """Return (primary, secondary) PostgreSQL configs from ApotekApps/.env.
     Supports both old duplicate DB_* format and new STANDBY_DB_* format.
@@ -1237,6 +1268,16 @@ def _get_both_postgres_configs():
         if cc.pg_password:
             primary['password'] = cc.pg_password
             secondary['password'] = cc.pg_password
+        if cc.pg_secondary_host:
+            secondary['host'] = cc.pg_secondary_host
+        if cc.pg_secondary_port:
+            secondary['port'] = cc.pg_secondary_port
+        if cc.pg_secondary_name:
+            secondary['name'] = cc.pg_secondary_name
+        if cc.pg_secondary_user:
+            secondary['user'] = cc.pg_secondary_user
+        if cc.pg_secondary_password:
+            secondary['password'] = cc.pg_secondary_password
 
     # Fix: if primary and secondary have the same port (common when ApotekApps/.env
     # has DB_PORT=5006 in both sections), probe for the actual standby port.
@@ -1256,6 +1297,7 @@ def _get_both_postgres_configs():
     return primary, secondary
 
 
+@_ttl_cache()
 def _probe_postgres(config):
     """Return ('healthy'|'critical', detail) by probing a PostgreSQL instance."""
     import socket
@@ -1278,6 +1320,7 @@ def _probe_postgres(config):
         return "critical", f"connect failed: {e}"
 
 
+@_ttl_cache()
 def _postgres_size(config) -> dict:
     """Return size info for a PostgreSQL instance."""
     host = config['host']
@@ -1330,21 +1373,16 @@ def _postgres_size(config) -> dict:
                 "status": "critical", "detail": f"connect failed: {e}"}
 
 
+@_ttl_cache()
 def _probe_apotek_db():
     """Return ('healthy'|'critical', detail) by probing ApotekApps PostgreSQL.
 
-    Maintains backward compatibility by using the primary DB config.
-    For secondary DB probing, use _probe_postgres() directly with secondary config.
+    Uses _get_both_postgres_configs() so the same probe result is shared via
+    the TTL cache with api_topology_json (which calls _probe_postgres directly
+    with the same config dict).
     """
-    cfg = _apotek_apps_config()
-    config = {
-        "host": cfg("DB_HOST", "localhost"),
-        "port": int(cfg("DB_PORT", 5432)),
-        "name": cfg("DB_NAME", "apotek_pos"),
-        "user": cfg("DB_USER", "postgres"),
-        "password": cfg("DB_PASSWORD", ""),
-    }
-    return _probe_postgres(config)
+    primary_cfg, _ = _get_both_postgres_configs()
+    return _probe_postgres(primary_cfg)
 
 
 def _sqlite_size(path) -> int:
@@ -1356,6 +1394,7 @@ def _sqlite_size(path) -> int:
         return 0
 
 
+@_ttl_cache()
 def _redis_size() -> dict:
     """Return {'bytes': int|None, 'keys': int|None, 'status': ...} for Redis
     via a raw RESP INFO+DBSIZE (no redis-py dependency required)."""
@@ -1440,6 +1479,7 @@ def _parse_redis_url(url: str) -> dict:
     }
 
 
+@_ttl_cache()
 def _probe_redis():
     """Probe Redis with a raw RESP PING (no redis-py dependency required).
 
@@ -1505,6 +1545,7 @@ def _probe_redis():
         return "critical", f"unreachable: {e}. Start Redis: sh scripts/redis.sh start", meta
 
 
+@_ttl_cache()
 def _probe_media():
     """Probe ApotekApps media storage directory (exists + writable + size)."""
     import os
@@ -1550,6 +1591,7 @@ def _probe_media():
     return "healthy", f"{files} files · {size}", meta
 
 
+@_ttl_cache()
 def _probe_nginx():
     """Probe Nginx: process running + listening on :80/:443.
 
@@ -1606,6 +1648,7 @@ def _probe_ingress(status, detail, meta):
     return status, f"Ingress · {detail}", meta
 
 
+@_ttl_cache()
 def _probe_waf():
     """Probe whether a WAF module (ModSecurity) is configured on Nginx."""
     import shutil
@@ -1625,6 +1668,7 @@ def _probe_waf():
         return "warning", f"deteksi WAF gagal: {e}", meta
 
 
+@_ttl_cache()
 def _probe_python():
     """Probe the Python runtime that runs ApotekMonitor / ApotekApps.
 
@@ -1672,6 +1716,7 @@ def _human_bytes(n):
     return f"{n:.1f} PB"
 
 
+@_ttl_cache()
 def _probe_system():
     """Host/OS-level health: disk, memory, and load average.
 
@@ -1785,6 +1830,7 @@ def _probe_system():
     return worst, detail, meta
 
 
+@_ttl_cache()
 def _apotekapps_email_config():
     """Baca konfigurasi email dari ApotekApps.
 
@@ -1799,7 +1845,7 @@ def _apotekapps_email_config():
 
     def _get(path):
         try:
-            with urllib_request.urlopen(base + path, timeout=4) as resp:
+            with urllib_request.urlopen(base + path, timeout=2) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception:
             return None
@@ -1830,6 +1876,7 @@ def _apotekapps_email_config():
     }
 
 
+@_ttl_cache()
 def _probe_email():
     """Probe the configured SMTP server for email delivery health.
 
@@ -1919,21 +1966,43 @@ def api_topology_json(request):
     now = timezone.now()
     since = now - timedelta(minutes=5)
 
-    # Real health probes for ApotekApps backing services
+    # Real health probes for ApotekApps backing services.
+    # Run all independent probes concurrently via a thread pool so the total
+    # latency is max(probe_times) instead of sum(probe_times). Each probe is
+    # individually TTL-cached, so concurrent / sequential callers share results.
+    from concurrent.futures import ThreadPoolExecutor
+
     db_configs = _get_both_postgres_configs()
     primary_cfg, secondary_cfg = db_configs
-    db_status, db_detail = _probe_postgres(primary_cfg)
-    pg = _postgres_size(primary_cfg)
-    db_secondary_status, db_secondary_detail = _probe_postgres(secondary_cfg)
-    pg_secondary = _postgres_size(secondary_cfg)
-    redis_status, redis_detail, redis_meta = _probe_redis()
-    media_status, media_detail, media_meta = _probe_media()
-    nginx_status, nginx_detail, nginx_meta = _probe_nginx()
-    python_status, python_detail, python_meta = _probe_python()
-    system_status, system_detail, system_meta = _probe_system()
-    ingress_status, ingress_detail, ingress_meta = _probe_ingress(*_probe_nginx())
-    waf_status, waf_detail, waf_meta = _probe_waf()
-    email_status, email_detail, email_meta = _probe_email()
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        f_db = pool.submit(_probe_postgres, primary_cfg)
+        f_pg_size = pool.submit(_postgres_size, primary_cfg)
+        f_db_sec = pool.submit(_probe_postgres, secondary_cfg)
+        f_pg_sec_size = pool.submit(_postgres_size, secondary_cfg)
+        f_redis = pool.submit(_probe_redis)
+        f_media = pool.submit(_probe_media)
+        f_nginx = pool.submit(_probe_nginx)
+        f_python = pool.submit(_probe_python)
+        f_system = pool.submit(_probe_system)
+        f_waf = pool.submit(_probe_waf)
+        f_email = pool.submit(_probe_email)
+
+        db_status, db_detail = f_db.result()
+        pg = f_pg_size.result()
+        db_secondary_status, db_secondary_detail = f_db_sec.result()
+        pg_secondary = f_pg_sec_size.result()
+        redis_status, redis_detail, redis_meta = f_redis.result()
+        media_status, media_detail, media_meta = f_media.result()
+        nginx_status, nginx_detail, nginx_meta = f_nginx.result()
+        python_status, python_detail, python_meta = f_python.result()
+        system_status, system_detail, system_meta = f_system.result()
+        waf_status, waf_detail, waf_meta = f_waf.result()
+        email_status, email_detail, email_meta = f_email.result()
+
+    ingress_status, ingress_detail, ingress_meta = _probe_ingress(
+        nginx_status, nginx_detail, nginx_meta
+    )
 
     # Build nodes from monitored endpoints (grouped by module = service)
     eps = APIEndpoint.objects.filter(is_active=True)
@@ -2512,7 +2581,333 @@ def api_alert_mark_read(request):
     return JsonResponse({"ok": True, "unread": Alert.objects.filter(is_read=False).count()})
 
 
-# ── Webhook receiver ──────────────────────────────────────────────────────────
+# ── Slow Connection / pg_stat_statements ────────────────────────────────────────
+
+
+def _pg_connect_for_slow(cfg):
+    """Open a raw psycopg2/psycopg connection to a PostgreSQL config."""
+    import psycopg
+    try:
+        return psycopg.connect(
+            host=cfg["host"], port=cfg["port"], dbname=cfg["name"],
+            user=cfg["user"], password=cfg["password"], connect_timeout=3,
+        )
+    except ImportError:
+        import psycopg2
+        return psycopg2.connect(
+            host=cfg["host"], port=cfg["port"], dbname=cfg["name"],
+            user=cfg["user"], password=cfg["password"], connect_timeout=3,
+        )
+
+
+def _ensure_pg_stat_statements(cur):
+    """Enable pg_stat_statements extension if not already installed."""
+    try:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+    except Exception:
+        pass
+
+
+def _query_pg_stat_statements(cur):
+    """Fetch top slow queries from pg_stat_statements.
+
+    Handles both old (total_time/mean_time) and new (total_exec_time/mean_exec_time)
+    column names depending on PostgreSQL version.
+    """
+    # Probe which columns are available
+    cur.execute("SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'pg_stat_statements' "
+                "AND column_name IN ('total_exec_time','mean_exec_time','total_time','mean_time')")
+    cols = {r[0] for r in cur.fetchall()}
+    total_col = "total_exec_time" if "total_exec_time" in cols else "total_time"
+    mean_col = "mean_exec_time" if "mean_exec_time" in cols else "mean_time"
+
+    cur.execute(f"""
+        SELECT queryid, query, calls, {total_col}, {mean_col}, rows,
+               shared_blks_hit, shared_blks_read, shared_blks_written,
+               temp_blks_written
+        FROM pg_stat_statements
+        ORDER BY {mean_col} DESC
+        LIMIT 25
+    """)
+    results = []
+    for row in cur.fetchall():
+        results.append({
+            "queryid": row[0],
+            "query": (row[1] or "")[:300],
+            "calls": row[2] or 0,
+            "total_ms": round(row[3] or 0, 1),
+            "mean_ms": round(row[4] or 0, 1),
+            "rows": row[5] or 0,
+            "shared_blks_hit": row[6] or 0,
+            "shared_blks_read": row[7] or 0,
+            "shared_blks_written": row[8] or 0,
+            "temp_blks_written": row[9] or 0,
+        })
+    return results
+
+
+def _query_table_stats(cur):
+    """Fetch per-table stats from pg_stat_user_tables."""
+    cur.execute("""
+        SELECT schemaname, tablename,
+               seq_scan, seq_tup_read, idx_scan,
+               n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd,
+               n_live_tup, n_dead_tup, n_mod_since_analyze,
+               last_vacuum, last_autovacuum, last_analyze, last_autoanalyze
+        FROM pg_stat_user_tables
+        ORDER BY (COALESCE(n_live_tup,0) + COALESCE(n_dead_tup,0)) DESC
+        LIMIT 25
+    """)
+    results = []
+    for row in cur.fetchall():
+        live = row[9] or 0
+        dead = row[10] or 0
+        total = live + dead
+        dead_ratio = round(dead / total * 100, 1) if total else 0
+        results.append({
+            "schema": row[0],
+            "table": row[1],
+            "seq_scan": row[2] or 0,
+            "seq_tup_read": row[3] or 0,
+            "idx_scan": row[4] or 0,
+            "n_tup_ins": row[5] or 0,
+            "n_tup_upd": row[6] or 0,
+            "n_tup_del": row[7] or 0,
+            "n_tup_hot_upd": row[8] or 0,
+            "n_live_tup": live,
+            "n_dead_tup": dead,
+            "n_mod_since_analyze": row[11] or 0,
+            "last_vacuum": row[12],
+            "last_autovacuum": row[13],
+            "last_analyze": row[14],
+            "last_autoanalyze": row[15],
+            "dead_ratio_pct": dead_ratio,
+        })
+    return results
+
+
+def _query_index_stats(cur):
+    """Fetch index usage stats from pg_stat_user_indexes."""
+    cur.execute("""
+        SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch
+        FROM pg_stat_user_indexes
+        WHERE schemaname NOT IN ('pg_catalog','information_schema')
+        ORDER BY idx_scan ASC
+        LIMIT 30
+    """)
+    results = []
+    for row in cur.fetchall():
+        results.append({
+            "schema": row[0],
+            "table": row[1],
+            "index": row[2],
+            "idx_scan": row[3] or 0,
+            "idx_tup_read": row[4] or 0,
+            "idx_tup_fetch": row[5] or 0,
+            "unused": (row[3] or 0) == 0,
+        })
+    return results
+
+
+def _build_suggestions(queries, tables, indexes):
+    """Generate maintenance suggestions from probe data."""
+    suggestions = []
+
+    # 1. Slow queries → suggest EXPLAIN ANALYZE
+    for q in queries:
+        if q["mean_ms"] > 500:
+            suggestions.append({
+                "type": "slow_query",
+                "severity": "warning",
+                "table": None,
+                "action": "EXPLAIN ANALYZE",
+                "detail": f"Query mean {q['mean_ms']}ms over {q['calls']} calls. "
+                          f"Run EXPLAIN (ANALYZE, BUFFERS) to find the bottleneck.",
+                "sql": f"EXPLAIN (ANALYZE, BUFFERS)\n{q['query'][:200]}",
+            })
+
+    # 2. High dead tuples → suggest VACUUM
+    for t in tables:
+        if t["dead_ratio_pct"] > 20:
+            suggestions.append({
+                "type": "vacuum",
+                "severity": "warning" if t["dead_ratio_pct"] > 50 else "info",
+                "table": f"{t['schema']}.{t['table']}",
+                "action": "VACUUM",
+                "detail": f"{t['n_dead_tup']} dead tuples "
+                          f"({t['dead_ratio_pct']}% of {t['n_live_tup']} live). "
+                          f"Bloat: {t['dead_ratio_pct']}%.",
+            })
+
+    # 3. Stale statistics → suggest ANALYZE
+    for t in tables:
+        live = t["n_live_tup"]
+        if live and t["n_mod_since_analyze"] > 0:
+            mod_ratio = round(t["n_mod_since_analyze"] / live * 100, 1)
+            if mod_ratio > 10:
+                suggestions.append({
+                    "type": "analyze",
+                    "severity": "info",
+                    "table": f"{t['schema']}.{t['table']}",
+                    "action": "ANALYZE",
+                    "detail": f"{t['n_mod_since_analyze']} modified rows "
+                              f"({mod_ratio}% of {live} live rows). Stats are stale.",
+                    "sql": f"ANALYZE \"{t['schema']}\".\"{t['table']}\";",
+                })
+
+    # 4. Unused indexes → suggest DROP
+    for idx in indexes:
+        if idx["unused"] and idx["idx_tup_read"] == 0 and idx["idx_tup_fetch"] == 0:
+            suggestions.append({
+                "type": "unused_index",
+                "severity": "info",
+                "table": f"{idx['schema']}.{idx['table']}",
+                "action": "DROP INDEX",
+                "detail": f"Index '{idx['index']}' has never been scanned. "
+                          f"Consider dropping it to reduce write overhead.",
+                "sql": f"DROP INDEX IF EXISTS \"{idx['index']}\";",
+            })
+
+    # 5. High seq_scan vs idx_scan → suggest CREATE INDEX
+    for t in tables:
+        if t["seq_scan"] > max(t["idx_scan"] * 5, 10) and t["seq_tup_read"] > 1000:
+            suggestions.append({
+                "type": "missing_index",
+                "severity": "warning",
+                "table": f"{t['schema']}.{t['table']}",
+                "action": "CREATE INDEX",
+                "detail": f"Table has {t['seq_scan']} seq scans vs "
+                          f"{t['idx_scan']} idx scans, reading {t['seq_tup_read']} rows. "
+                          f"An index would reduce sequential scans.",
+            })
+
+    return suggestions
+
+
+def _pg_type_cast(status, detail, meta):
+    """Normalize probe result for consistent JSON output."""
+    return {"status": status, "detail": detail, **meta}
+
+
+@login_required
+def slow_connection_view(request):
+    """Halaman Slow Connection — analisis query lambat & saran maintenance dari PostgreSQL."""
+    primary_cfg, secondary_cfg = _get_both_postgres_configs()
+    context = {
+        "active_menu": "slow_connection",
+        "pg_host": primary_cfg.get("host", ""),
+        "pg_port": primary_cfg.get("port", ""),
+        "pg_name": primary_cfg.get("name", ""),
+        "pg_secondary_host": secondary_cfg.get("host", ""),
+        "pg_secondary_port": secondary_cfg.get("port", ""),
+        "pg_secondary_name": secondary_cfg.get("name", ""),
+    }
+    return render(request, "monitor/slow_connection.html", context)
+
+
+@login_required
+def api_slow_queries(request):
+    """Return slow-query analysis via pg_stat_statements + table/index stats + suggestions.
+
+    Query param ``db`` — ``primary`` (default) or ``secondary`` selects which
+    PostgreSQL instance to analyze.
+    """
+    db = request.GET.get("db", "primary")
+    primary_cfg, secondary_cfg = _get_both_postgres_configs()
+    cfg = primary_cfg if db == "primary" else secondary_cfg
+
+    result = {
+        "db": db,
+        "host": cfg.get("host"),
+        "port": cfg.get("port"),
+        "name": cfg.get("name"),
+        "connected": False,
+        "pg_statements_enabled": False,
+        "queries": [],
+        "tables": [],
+        "indexes": [],
+        "suggestions": [],
+        "error": None,
+        "server_time": timezone.now().isoformat(),
+    }
+
+    try:
+        conn = _pg_connect_for_slow(cfg)
+    except Exception as e:
+        result["error"] = f"Connection failed: {e}"
+        result["status"] = "critical"
+        return JsonResponse(result)
+
+    try:
+        with conn.cursor() as cur:
+            # Check if pg_stat_statements extension is available
+            try:
+                _ensure_pg_stat_statements(cur)
+                cur.execute("SELECT count(*) FROM pg_stat_statements")
+                result["pg_statements_enabled"] = True
+            except Exception:
+                result["pg_statements_enabled"] = False
+                result["error"] = ("pg_stat_statements extension not available. "
+                                   "Enable with: CREATE EXTENSION pg_stat_statements")
+
+            if result["pg_statements_enabled"]:
+                result["queries"] = _query_pg_stat_statements(cur)
+
+            result["tables"] = _query_table_stats(cur)
+            result["indexes"] = _query_index_stats(cur)
+
+        result["connected"] = True
+        result["suggestions"] = _build_suggestions(
+            result["queries"], result["tables"], result["indexes"])
+    except Exception as e:
+        result["error"] = str(e)
+    finally:
+        conn.close()
+
+    return JsonResponse(result)
+
+
+@login_required
+@require_POST
+def api_slow_maintenance(request):
+    """Run a maintenance action on a PostgreSQL table (VACUUM / ANALYZE).
+
+    Body JSON: {action: "vacuum"|"analyze"|"vacuum_analyze", table: "schema.table", db: "primary"|"secondary"}
+    """
+    db = request.GET.get("db", "primary")
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"error": "invalid json"}, status=400)
+
+    action = (payload.get("action") or "").strip().lower()
+    table = (payload.get("table") or "").strip()
+
+    if action not in ("vacuum", "analyze", "vacuum_analyze"):
+        return JsonResponse({"error": "action must be vacuum/analyze/vacuum_analyze"}, status=400)
+    if not table:
+        return JsonResponse({"error": "table required"}, status=400)
+
+    primary_cfg, secondary_cfg = _get_both_postgres_configs()
+    cfg = primary_cfg if db == "primary" else secondary_cfg
+
+    sql_map = {
+        "vacuum": f"VACUUM ANALYZE \"{table}\"",
+        "analyze": f"ANALYZE \"{table}\"",
+        "vacuum_analyze": f"VACUUM ANALYZE \"{table}\"",
+    }
+    sql = sql_map[action]
+
+    try:
+        conn = _pg_connect_for_slow(cfg)
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.close()
+        return JsonResponse({"ok": True, "detail": f"{sql} selesai", "table": table, "db": db})
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e), "table": table, "db": db}, status=500)
 
 @csrf_exempt
 @require_POST

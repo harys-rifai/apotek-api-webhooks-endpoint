@@ -486,7 +486,7 @@
   // ── Monitoring notifications (status-change alerts) ──────────
   let prevStatus = {};        // id → previous status string
   let firstRender = true;
-  const RECORD_COOLDOWN_MS = 60000;   // min interval between DB alerts per node (avoid spam)
+  const RECORD_COOLDOWN_MS = 15000;   // min interval between DB alerts per node (avoid spam)
   let notifyAt = {};                   // id → last notification timestamp
   const LABELS = {
     pg: "PostgreSQL", redis: "Redis Cache", media: "Media Storage",
@@ -1050,7 +1050,7 @@
     }
   }
   tick();
-  setInterval(tick, 10000);
+  setInterval(tick, 5000);
 
   // Re-render after a theme switch so any stale SVG paint artifact
   // (e.g. a flickering line at the right edge) is cleared without a refresh.

@@ -15,6 +15,9 @@
   <a href="{% url 'topology' %}" class="dock__item {% if active_menu == 'topology' %}active{% endif %}" data-tip="Topology">
     <span class="dock__tile"><i class="fa-solid fa-network-wired"></i></span>
   </a>
+  <a href="{% url 'slow_connection' %}" class="dock__item {% if active_menu == 'slow_connection' %}active{% endif %}" data-tip="Slow Connection">
+    <span class="dock__tile"><i class="fa-solid fa-bolt"></i></span>
+  </a>
   <a href="{% url 'db_maintenance' %}" class="dock__item {% if active_menu == 'db_maintenance' %}active{% endif %}" data-tip="Maintenance">
     <span class="dock__tile"><i class="fa-solid fa-screwdriver-wrench"></i></span>
   </a>

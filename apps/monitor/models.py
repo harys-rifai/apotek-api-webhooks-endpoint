@@ -301,6 +301,13 @@ class ConnectionConfig(models.Model):
     pg_user = models.CharField(max_length=255, blank=True, default="")
     pg_password = models.CharField(max_length=255, blank=True, default="")
 
+    # PostgreSQL Secondary (standy replica)
+    pg_secondary_host = models.CharField(max_length=255, blank=True, default="")
+    pg_secondary_port = models.IntegerField(blank=True, null=True)
+    pg_secondary_name = models.CharField(max_length=255, blank=True, default="")
+    pg_secondary_user = models.CharField(max_length=255, blank=True, default="")
+    pg_secondary_password = models.CharField(max_length=255, blank=True, default="")
+
     # Redis
     redis_url = models.CharField(
         max_length=512, blank=True, default="",
@@ -333,6 +340,14 @@ class ConnectionConfig(models.Model):
         if not self.pg_password:
             return ""
         k = self.pg_password
+        if len(k) <= 4:
+            return "****"
+        return k[:2] + "****" + k[-2:]
+
+    def mask_pg_secondary_password(self):
+        if not self.pg_secondary_password:
+            return ""
+        k = self.pg_secondary_password
         if len(k) <= 4:
             return "****"
         return k[:2] + "****" + k[-2:]

@@ -64,7 +64,9 @@ def _ensure_tables(cur):
     """)
 
 
-def _upsert(cur, table, cols, rows):
+def _upsert(cur, table, cols, rows, batch_size=500):
+    """Batch INSERT ... ON CONFLICT upsert. Rows are split into *batch_size*
+    chunks to avoid psycopg3 pipeline abort on large payloads."""
     if not rows:
         return 0
     col_sql = ", ".join(cols)
@@ -72,8 +74,14 @@ def _upsert(cur, table, cols, rows):
     upd = ", ".join(f"{c}=EXCLUDED.{c}" for c in cols if c != "sync_key")
     sql = (f"INSERT INTO {table} ({col_sql}) VALUES ({placeholders}) "
            f"ON CONFLICT (sync_key) DO UPDATE SET {upd}")
-    cur.executemany(sql, rows)
-    return len(rows)
+
+    total = 0
+    for i in range(0, len(rows), batch_size):
+        chunk = rows[i:i + batch_size]
+        cur.executemany(sql, chunk)
+        total += len(chunk)
+
+    return total
 
 
 class Command(BaseCommand):
@@ -130,41 +138,52 @@ class Command(BaseCommand):
             return
 
         conn = connections["backup_pg"]
-        with conn.cursor() as cur:
-            _ensure_tables(cur)
+        try:
+            with conn.cursor() as cur:
+                _ensure_tables(cur)
 
-            if opts["clear"]:
-                for t in ("alert", "ai_insight", "node_layout"):
-                    cur.execute(f"DELETE FROM monitor_backup.{t}")
-                self.stdout.write("Tabel backup dikosongkan.")
+                if opts["clear"]:
+                    for t in ("alert", "ai_insight", "node_layout"):
+                        cur.execute(f"DELETE FROM monitor_backup.{t}")
+                    self.stdout.write("Tabel backup dikosongkan.")
 
-            # Alerts
-            alert_rows = [(
-                f"alert:{a.id}", a.level, a.title, a.message, a.source,
-                a.is_read, a.created_at,
-            ) for a in Alert.objects.all()]
-            n_a = _upsert(cur, "monitor_backup.alert",
-                          ["sync_key", "level", "title", "message", "source",
-                           "is_read", "created_at"], alert_rows)
+                # Alerts
+                alert_rows = [(
+                    f"alert:{a.id}", a.level, a.title, a.message, a.source,
+                    a.is_read, a.created_at,
+                ) for a in Alert.objects.all()]
+                n_a = _upsert(cur, "monitor_backup.alert",
+                              ["sync_key", "level", "title", "message", "source",
+                               "is_read", "created_at"], alert_rows)
 
-            # AI Insights
-            ai_rows = [(
-                f"ai:{r.id}", r.severity, r.summary,
-                json.dumps(r.details, default=str), json.dumps(r.metrics, default=str),
-                r.created_at,
-            ) for r in AiInsight.objects.all()]
-            n_i = _upsert(cur, "monitor_backup.ai_insight",
-                          ["sync_key", "severity", "summary", "details", "metrics",
-                           "created_at"], ai_rows)
+                # AI Insights
+                ai_rows = [(
+                    f"ai:{r.id}", r.severity, r.summary,
+                    json.dumps(r.details, default=str), json.dumps(r.metrics, default=str),
+                    r.created_at,
+                ) for r in AiInsight.objects.all()]
+                n_i = _upsert(cur, "monitor_backup.ai_insight",
+                              ["sync_key", "severity", "summary", "details", "metrics",
+                               "created_at"], ai_rows)
 
-            # Node layouts
-            nl_rows = [(
-                f"nl:{nl.node_id}", nl.node_id, nl.x, nl.y, nl.updated_at,
-            ) for nl in NodeLayout.objects.all()]
-            n_n = _upsert(cur, "monitor_backup.node_layout",
-                          ["sync_key", "node_id", "x", "y", "updated_at"], nl_rows)
+                # Node layouts
+                nl_rows = [(
+                    f"nl:{nl.node_id}", nl.node_id, nl.x, nl.y, nl.updated_at,
+                ) for nl in NodeLayout.objects.all()]
+                n_n = _upsert(cur, "monitor_backup.node_layout",
+                              ["sync_key", "node_id", "x", "y", "updated_at"], nl_rows)
 
-            conn.commit()
-            self.stdout.write(
-                f"Sync selesai -> Alert: {n_a}, AiInsight: {n_i}, NodeLayout: {n_n}."
-            )
+                conn.commit()
+                self.stdout.write(
+                    f"Sync selesai -> Alert: {n_a}, AiInsight: {n_i}, NodeLayout: {n_n}."
+                )
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            self.stderr.write(f"Gagal sinkron ke PostgreSQL: {e}")
+            raise
+        finally:
+            conn.close()
+            connections["backup_pg"].close_if_unusable_or_obsolete()

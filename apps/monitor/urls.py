@@ -9,6 +9,7 @@ urlpatterns = [
     path("webhooks/", views.webhook_list, name="webhook_list"),
 
     path("topology/", views.topology_view, name="topology"),
+    path("slow-connection/", views.slow_connection_view, name="slow_connection"),
     path("db-maintenance/", views.db_maintenance_view, name="db_maintenance"),
     path("alerts/", views.alerts_view, name="alerts_page"),
     path("deliveries/", views.delivery_list, name="delivery_list"),
@@ -28,6 +29,8 @@ urlpatterns = [
     path("api/db-sqlite-vacuum/", views.api_db_sqlite_vacuum, name="api_db_sqlite_vacuum"),
     path("api/db-redis-flush/", views.api_db_redis_flush, name="api_db_redis_flush"),
     path("api/topology/", views.api_topology_json, name="api_topology_json"),
+    path("api/slow-queries/", views.api_slow_queries, name="api_slow_queries"),
+    path("api/slow-maintenance/", views.api_slow_maintenance, name="api_slow_maintenance"),
     path("api/email/", views.api_email_monitor, name="api_email_monitor"),
     path("api/ai-insight/", views.api_ai_insight, name="api_ai_insight"),
     path("api/ai-chat/", views.api_ai_chat, name="api_ai_chat"),
