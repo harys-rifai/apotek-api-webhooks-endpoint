@@ -2649,8 +2649,12 @@ def _query_pg_stat_statements(cur):
 
 def _query_table_stats(cur):
     """Fetch per-table stats from pg_stat_user_tables."""
-    cur.execute("""
-        SELECT schemaname, tablename,
+    cur.execute("SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'pg_stat_user_tables' "
+                "AND column_name IN ('tablename','relname')")
+    table_col = "relname" if "relname" in {r[0] for r in cur.fetchall()} else "tablename"
+    cur.execute(f"""
+        SELECT schemaname, {table_col},
                seq_scan, seq_tup_read, idx_scan,
                n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd,
                n_live_tup, n_dead_tup, n_mod_since_analyze,
@@ -2689,8 +2693,12 @@ def _query_table_stats(cur):
 
 def _query_index_stats(cur):
     """Fetch index usage stats from pg_stat_user_indexes."""
-    cur.execute("""
-        SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch
+    cur.execute("SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'pg_stat_user_indexes' "
+                "AND column_name IN ('indexname','indexrelname')")
+    index_col = "indexrelname" if "indexrelname" in {r[0] for r in cur.fetchall()} else "indexname"
+    cur.execute(f"""
+        SELECT schemaname, relname, {index_col}, idx_scan, idx_tup_read, idx_tup_fetch
         FROM pg_stat_user_indexes
         WHERE schemaname NOT IN ('pg_catalog','information_schema')
         ORDER BY idx_scan ASC

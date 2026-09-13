@@ -16,6 +16,7 @@ Jalankan:
     python manage.py db_sync_config              # detect + sync port to .env & table
 """
 import json
+import unicodedata
 
 from django.core.management.base import BaseCommand
 from django.db import connections
@@ -64,9 +65,21 @@ def _ensure_tables(cur):
     """)
 
 
+def _normalize_text(value):
+    """Convert non-ASCII strings to ASCII for WIN1252 PostgreSQL instances."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    return value
+
+
 def _upsert(cur, table, cols, rows, batch_size=500):
     """Batch INSERT ... ON CONFLICT upsert. Rows are split into *batch_size*
-    chunks to avoid psycopg3 pipeline abort on large payloads."""
+    chunks to avoid psycopg3 pipeline abort on large payloads.
+
+    Non-ASCII strings are normalized to ASCII to avoid WIN1252 encoding
+    errors on PostgreSQL instances created with non-UTF8 encodings."""
     if not rows:
         return 0
     col_sql = ", ".join(cols)
@@ -78,8 +91,12 @@ def _upsert(cur, table, cols, rows, batch_size=500):
     total = 0
     for i in range(0, len(rows), batch_size):
         chunk = rows[i:i + batch_size]
-        cur.executemany(sql, chunk)
-        total += len(chunk)
+        normalized = [
+            tuple(_normalize_text(v) if isinstance(v, str) else v for v in row)
+            for row in chunk
+        ]
+        cur.executemany(sql, normalized)
+        total += len(normalized)
 
     return total
 
