@@ -2180,6 +2180,11 @@ def api_topology_json(request):
         "tech": "SQLite", "status": "healthy",
     })
     nodes.append({
+        "id": "backup", "label": "Backup Site", "kind": "storage",
+        "tech": "Database Backup · Daily", "status": "healthy",
+        "detail": "Backs up PostgreSQL primary, PostgreSQL replica, Redis, and Monitor SQLite",
+    })
+    nodes.append({
         "id": "email", "label": "Email Monitor", "kind": "service",
         "tech": f"SMTP · {email_meta.get('host', 'n/a')}:{email_meta.get('port', '')}",
         "status": email_status, "detail": email_detail,
@@ -2254,7 +2259,19 @@ def api_topology_json(request):
     edges.append({"from": "pg", "to": "apps_api", "requests_5m": 0, "status": db_status,
                   "label": "SQL"})
     edges.append({"from": "pg_secondary", "to": "apps_api", "requests_5m": 0, "status": db_secondary_status,
-                  "label": "replica"})
+                   "label": "replica"})
+    # async replication: primary → replica (ports 5006 → 5008)
+    edges.append({"from": "pg", "to": "pg_secondary", "requests_5m": 0, "status": db_status,
+                   "label": "async replica", "tech": ":5006 → :5008"})
+    # backup site receives dumps from all databases
+    edges.append({"from": "pg", "to": "backup", "requests_5m": 0, "status": db_status,
+                   "label": "dump"})
+    edges.append({"from": "pg_secondary", "to": "backup", "requests_5m": 0, "status": db_secondary_status,
+                   "label": "dump"})
+    edges.append({"from": "redis", "to": "backup", "requests_5m": 0, "status": redis_status,
+                   "label": "snapshot"})
+    edges.append({"from": "monitor_db", "to": "backup", "requests_5m": 0, "status": "healthy",
+                   "label": "dump"})
     edges.append({"from": "redis", "to": "apps_api", "requests_5m": 0, "status": redis_status,
                   "label": "cache"})
     edges.append({"from": "media", "to": "apps_api", "requests_5m": 0, "status": media_status,

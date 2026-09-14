@@ -90,13 +90,34 @@
   .pulse-ring { fill:none; stroke-width:2; opacity:0; }
 
   .legend {
-    display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin-top:1rem;
-    font-size:.78rem; color:var(--color-muted); justify-content:center;
+    display:flex; flex-wrap:wrap; gap:.25rem .6rem;
+    font-size:.6rem; color:var(--color-muted); justify-content:center;
+    background:rgba(20,20,38,.45); border:1px solid var(--color-border,#2a2a40);
+    border-radius:var(--radius-lg); padding:.4rem .6rem;
+    backdrop-filter:blur(4px);
+    position:absolute; bottom:1rem; left:50%; transform:translateX(-50%);
+    cursor:move; user-select:none; z-index:10;
+    transition: background var(--transition), color var(--transition),
+                border-color var(--transition);
   }
-  .legend .item { display:inline-flex; align-items:center; gap:.45rem;
-    padding:.3rem .6rem; border-radius:999px; background:var(--bg-card);
-    border:1px solid var(--color-border,#2a2a40); }
-  .legend .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .legend .item { display:inline-flex; align-items:center; gap:.25rem;
+    padding:.2rem .4rem; border-radius:999px; font-size:.6rem;
+    background:rgba(255,255,255,.04); border:1px solid var(--color-border,#2a2a40); }
+  .legend .sw { width:9px; height:9px; border-radius:3px; display:inline-block; }
+  .legend-group { display:inline-flex; align-items:center; gap:.25rem .4rem; flex-wrap:wrap; }
+  .legend-group .legend-label {
+    font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+    font-size:.5rem; color:var(--color-muted); white-space:nowrap; }
+  .legend-group:not(:last-child) .legend-divider {
+    content:""; width:1px; height:1em; background:var(--color-border,#2a2a40);
+    margin-left:.1rem; opacity:.4; }
+  .legend-dragging { cursor:grabbing; opacity:.85; }
+  [data-theme="light"] .legend {
+    background:rgba(255,255,255,.55);
+  }
+  [data-theme="light"] .legend .item {
+    background:rgba(0,0,0,.03);
+  }
 
   .node-tooltip {
     position:absolute; pointer-events:none; background:var(--tooltip-bg); color:var(--tooltip-text);
@@ -231,8 +252,9 @@
   }
   /* theme transition — semua kontainer topology ikut memudar bersama body
      agar tidak ada kedip (flash) saat ganti tema */
-  .topo-panel, .net-feed, .legend .item, .ai-insight, .db-size__row,
-  .topo-split #topoWrap, .node-tooltip {
+   .topo-panel, .net-feed, .legend, .legend .item, .legend-group, .legend-divider,
+   .ai-insight, .db-size__row,
+   .topo-split #topoWrap, .node-tooltip {
     transition: background var(--transition), color var(--transition),
                 border-color var(--transition);
   }
@@ -437,18 +459,23 @@
   </div>
 
   <div class="legend">
-    <span class="item"><span class="sw" style="background:#36ff9e"></span> Healthy</span>
-    <span class="item"><span class="sw" style="background:#ffd23f"></span> Warning</span>
-    <span class="item"><span class="sw" style="background:#ff4d6d"></span> Critical</span>
-    <span class="item"><span class="sw" style="background:#7a7a9d"></span> Idle</span>
-    <span class="item"><span class="sw" style="background:#b06bff"></span> Database</span>
-    <span class="item"><span class="sw" style="background:#ff9f43"></span> Redis Cache</span>
-    <span class="item"><span class="sw" style="background:#4dd0e1"></span> Media Storage</span>
-    <span class="item"><span class="sw" style="background:#36e0ff"></span> Service / API</span>
-    <span class="item"><span class="sw" style="background:#9b8cff"></span> Python Runtime</span>
-    <span class="item"><span class="sw" style="background:#36e0ff"></span> Nginx Proxy</span>
-    <span class="item"><span class="sw" style="background:#f6c945"></span> System Host</span>
-    <span class="item"><i class="fa-solid fa-circle-nodes" style="color:#36e0ff"></i> Animated edge = live traffic</span>
+    <span class="legend-group"><span class="legend-label">Status</span><span class="legend-divider"></span>
+      <span class="item"><span class="sw" style="background:#36ff9e"></span> Healthy</span>
+      <span class="item"><span class="sw" style="background:#ffd23f"></span> Warning</span>
+      <span class="item"><span class="sw" style="background:#ff4d6d"></span> Critical</span>
+      <span class="item"><span class="sw" style="background:#7a7a9d"></span> Idle</span></span>
+    <span class="legend-group"><span class="legend-label">Node</span><span class="legend-divider"></span>
+      <span class="item"><span class="sw" style="background:#b06bff"></span> Database</span>
+      <span class="item"><span class="sw" style="background:#ff9f43"></span> Redis Cache</span>
+      <span class="item"><span class="sw" style="background:#4dd0e1"></span> Media Storage</span>
+      <span class="item"><span class="sw" style="background:#6344c0"></span> Backup Site</span>
+      <span class="item"><span class="sw" style="background:#36e0ff"></span> Nginx Proxy</span>
+      <span class="item"><span class="sw" style="background:#9b8cff"></span> Python Runtime</span>
+      <span class="item"><span class="sw" style="background:#36e0ff"></span> Service / API</span>
+      <span class="item"><span class="sw" style="background:#f6c945"></span> System Host</span></span>
+    <span class="legend-group"><span class="legend-label">Edge</span><span class="legend-divider"></span>
+      <span class="item"><i class="fa-solid fa-circle-nodes" style="color:#36e0ff"></i> Animated edge = live traffic</span>
+      <span class="item"><i class="fa-solid fa-right-left" style="color:#36e0ff"></i> Bidirectional flow (in &amp; out)</span></span>
   </div>
 </div>
 {% endblock %}
@@ -478,10 +505,12 @@
   const edgesLayer = document.getElementById("edgesLayer");
   const tooltip = document.getElementById("tooltip");
   const wrap = document.getElementById("topoWrap");
+  const legend = document.getElementById("legend");
 
   let nodeState = {};
   let edgeState = [];
   let dragId = null, dragOff = { x: 0, y: 0 };
+  let legendDrag = false, legendOff = { x: 0, y: 0 };
 
   // ── Monitoring notifications (status-change alerts) ──────────
   let prevStatus = {};        // id → previous status string
@@ -608,7 +637,8 @@
        pg:             { x: 130, y: 130 },
       pg_secondary:   { x: 130, y: 330 },
       redis:          { x: 130, y: 520 },
-      media:          { x: 130, y: 710 },
+       media:          { x: 130, y: 710 },
+       backup:         { x: 130, y: 880 },
       nginx:          { x: 430, y: 40 },
       apps_api:       { x: 430, y: 420 },
       monitor:        { x: 760, y: 380 },
@@ -679,7 +709,8 @@
         color: "#6c9ccc", noHex: true },
       redis:      { svg: "M22.71 13.145c-1.66 2.092-3.452 4.483-7.038 4.483c-3.203 0-4.397-2.825-4.48-5.12c.701 1.484 2.073 2.685 4.214 2.63c4.117-.133 6.94-3.852 6.94-7.239c0-4.05-3.022-6.972-8.268-6.972c-3.752 0-8.4 1.428-11.455 3.685C2.59 6.937 3.885 9.958 4.35 9.626c2.648-1.904 4.748-3.13 6.784-3.744C8.12 9.244.886 17.05 0 18.425c.1 1.261 1.66 4.648 2.424 4.648c.232 0 .431-.133.664-.365a101 101 0 0 0 5.54-6.765c.222 3.104 1.748 6.898 6.014 6.898c3.819 0 7.604-2.756 9.33-8.965c.2-.764-.73-1.361-1.261-.73zm-4.349-5.013c0 1.959-1.926 2.922-3.685 2.922a4.45 4.45 0 0 1-2.235-.568c1.051-1.592 2.092-3.225 3.21-4.973c1.972.334 2.71 1.43 2.71 2.619",
         color: "#ff4438", noHex: true },
-      media:      { cls: "fa-solid fa-hard-drive",       color: "#0a8aa0" },
+       media:      { cls: "fa-solid fa-hard-drive",       color: "#0a8aa0" },
+       backup:     { cls: "fa-solid fa-cloud-arrow-up",   color: "#6344c0" },
       apps_api:   { cls: "fa-solid fa-server",           color: "#0072b8" },
       monitor:    { cls: "fa-solid fa-satellite-dish",  color: "#0072b8" },
       monitor_db: { svg: "M21.678.521c-1.032-.92-2.28-.55-3.513.544a8.71 8.71 0 0 0-.547.535c-2.109 2.237-4.066 6.38-4.674 9.544.237.48.422 1.093.544 1.561a13.044 13.044 0 0 1 .164.703s-.019-.071-.096-.296l-.05-.146a1.689 1.689 0 0 0-.033-.08c-.138-.32-.518-.995-.686-1.289-.143.423-.27.818-.376 1.176.484.884.778 2.4.778 2.4s-.025-.099-.147-.442c-.107-.303-.644-1.244-.772-1.464-.217.804-.304 1.346-.226 1.478.152.256.296.698.422 1.186.286 1.1.485 2.44.485 2.44l.017.224a22.41 22.41 0 0 0 .056 2.748c.095 1.146.273 2.13.5 2.657l.155-.084c-.334-1.038-.47-2.399-.41-3.967.09-2.398.642-5.29 1.661-8.304 1.723-4.55 4.113-8.201 6.3-9.945-1.993 1.8-4.692 7.63-5.5 9.788-.904 2.416-1.545 4.684-1.931 6.857.666-2.037 2.821-2.912 2.821-2.912s1.057-1.304 2.292-3.166c-.74.169-1.955.458-2.362.629-.6.251-.762.337-.762.337s1.945-1.184 3.613-1.72C21.695 7.9 24.195 2.767 21.678.521m-18.573.543A1.842 1.842 0 0 0 1.27 2.9v16.608a1.84 1.84 0 0 0 1.835 1.834h9.418a22.953 22.953 0 0 1-.052-2.707c-.006-.062-.011-.141-.016-.2a27.01 27.01 0 0 0-.473-2.378c-.121-.47-.275-.898-.369-1.057-.116-.197-.098-.31-.097-.432 0-.12.015-.245.037-.386a9.98 9.98 0 0 1 .234-1.045l.217-.028c-.017-.035-.014-.065-.031-.097l-.041-.381a32.8 32.8 0 0 1 .382-1.194l.2-.019c-.008-.016-.01-.038-.018-.053l-.043-.316c.63-3.28 2.587-7.443 4.8-9.791.066-.069.133-.128.198-.194Z",
@@ -823,6 +854,11 @@
         positions[id] = { x: Math.round(nodeState[id].x), y: Math.round(nodeState[id].y) };
       }
     }
+    // save legend position too (stored with node_id "legend" in NodeLayout)
+    if (legend && !legendDrag) {
+      const rect = legend.getBoundingClientRect();
+      positions["legend"] = { x: Math.round(rect.left), y: Math.round(rect.top) };
+    }
     if (_saveTimer) clearTimeout(_saveTimer);
     _saveTimer = setTimeout(() => {
       fetch("{% url 'api_topology_layout' %}", {
@@ -855,10 +891,14 @@
     const line = el("path", { class: "edge-line" + (down ? " down" : ""),
       d: edgePath(a, b), stroke: color });
     edgesLayer.appendChild(line);
-    const N = down ? 0 : 4, parts = [];
+    // Bidirectional flow: half the particles travel a→b (request/out),
+    // half travel b→a (response/in) so every node shows data IN and OUT.
+    const N = down ? 0 : 2, parts = [];
     for (let i = 0; i < N; i++) {
       const p = el("circle", { class: "particle", r: 3, fill: color, opacity: .9 });
-      edgesLayer.appendChild(p); parts.push({ el: p, t: i / N });
+      edgesLayer.appendChild(p); parts.push({ el: p, t: i / N, dir: 1 });
+      const pr = el("circle", { class: "particle", r: 3, fill: color, opacity: .9 });
+      edgesLayer.appendChild(pr); parts.push({ el: pr, t: i / N, dir: -1 });
     }
     edgeState.push({ key, ...e, a, b, line, parts, color, down });
   }
@@ -886,8 +926,8 @@
     for (const ed of edgeState) {
       if (ed.down) continue;
       for (const p of ed.parts) {
-        p.t = (p.t + speed) % 1;
-        const pt = pointOnPath(ed.a, ed.b, p.t);
+        p.t = (p.t + speed * p.dir + 1) % 1;
+        const pt = p.dir === -1 ? pointOnPath(ed.b, ed.a, p.t) : pointOnPath(ed.a, ed.b, p.t);
         p.el.setAttribute("cx", pt.x); p.el.setAttribute("cy", pt.y);
       }
     }
@@ -914,6 +954,15 @@
       else if (savedPos[n.id]) { n._x = savedPos[n.id].x; n._y = savedPos[n.id].y; }
       drawNode(n, i, data.nodes.length);
     });
+
+    // restore saved legend position (skip on first render so it keeps its
+    // default bottom-center placement until the user drags it)
+    if (!firstRender && legend && savedPos["legend"]) {
+      const lp = savedPos["legend"];
+      legend.style.left = lp.x + "px";
+      legend.style.top = lp.y + "px";
+      legend.style.transform = "none";
+    }
 
     // reuse existing edges (preserve particle progress) — only rebuild what changed
     const seenKeys = new Set();
@@ -980,7 +1029,30 @@
     view.y = my - (my - view.y) * (nh / view.h);
     view.w = nw; view.h = nh;
     applyView();
-  }, { passive: false });
+   }, { passive: false });
+
+  // ── Draggable legend (position persisted to NodeLayout) ──────────────
+  if (legend) {
+    legend.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      legendDrag = true; legendOff = { x: ev.clientX - legend.offsetLeft, y: ev.clientY - legend.offsetTop };
+      legend.classList.add("legend-dragging");
+    });
+    document.addEventListener("pointermove", (ev) => {
+      if (!legendDrag) return;
+      legend.style.left = (ev.clientX - legendOff.x) + "px";
+      legend.style.top = (ev.clientY - legendOff.y) + "px";
+      legend.style.transform = "none"; // disable center-transform while dragged
+    });
+    const endLegendDrag = () => {
+      if (legendDrag) {
+        legendDrag = false;
+        legend.classList.remove("legend-dragging");
+        saveLayout(); // persist legend position alongside node positions
+      }
+    };
+    document.addEventListener("pointerup", endLegendDrag);
+  }
 
   // ── Zoom / reset buttons ───────────────────────────────────────────
   function zoomBy(factor) {
