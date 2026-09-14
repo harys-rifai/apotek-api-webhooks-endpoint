@@ -323,7 +323,7 @@
             '</button>' : '';
           sbody.innerHTML += '<tr class="' + sevCls + '">' +
             '<td style="white-space:nowrap">' + escapeHtml(s.type) + '</td>' +
-            '<td style="white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(s.table || '—') + '</td>' +
+            '<td style="white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis">' + escapeHtml(s.table_label || s.table || '—') + '</td>' +
             '<td style="white-space:nowrap">' + escapeHtml(s.action) + (actionBtn ? ' ' + actionBtn : '') + '</td>' +
             '<td style="max-width:300px;word-wrap:break-word;word-break:break-word">' + escapeHtml(s.detail) + '</td>' +
             '<td><pre class="query-text" style="max-width:300px;max-height:80px;overflow:auto">' + escapeHtml(s.sql || '') + '</pre></td>' +
@@ -337,8 +337,8 @@
       renderPagination('scSuggestionsPagination', 'suggestions', {
         page: currentPage,
         per_page: perPage,
-        total_suggestions: d.suggestions.length
-      }, d.suggestions.length);
+        total_suggestions: d.pagination.total_suggestions
+      }, d.pagination.total_suggestions);
 
       // Wire up maintenance buttons
       document.querySelectorAll('.run-maint').forEach(function (btn2) {

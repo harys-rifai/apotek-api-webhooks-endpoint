@@ -155,6 +155,8 @@
       </div>
     </div>
 
+    <!-- AI & Email row -->
+    <div class="config-row">
     <!-- AI -->
     <div class="card card--collapsible">
       <div class="card__header cfg-toggle" data-target="body-ai">
@@ -195,7 +197,9 @@
           </div>
         </form>
       </div>
-    <!-- Email (ApotekApps) -->
+    </div>
+
+    <!-- Email (ApotekApps) — separate card -->
     <div class="card card--collapsible">
       <div class="card__header cfg-toggle" data-target="body-email">
         <h2 class="card__title"><i class="fa-solid fa-envelope" style="color:var(--neon-cyan)"></i> Email (ApotekApps)</h2>
@@ -207,7 +211,7 @@
       <div class="card__body cfg-body" id="body-email">
         <p class="hint" style="margin-bottom:.6rem">
           Konfigurasi SMTP dibaca <b>otomatis</b> dari ApotekApps
-          (<code>/api/common/system-status/</code>). ApotekApps adalah pemilik
+          (<code>/api/common/system-config/</code>). ApotekApps adalah pemilik
           setting ini — ubah di sana bila perlu.
         </p>
         <div class="form-group">
@@ -243,6 +247,7 @@
           <button type="button" class="btn btn-outline btn-sm" id="emailRefreshBtn"><i class="fa-solid fa-rotate"></i> Muat Ulang</button>
         </div>
       </div>
+    </div>
     </div>
 
   </div>

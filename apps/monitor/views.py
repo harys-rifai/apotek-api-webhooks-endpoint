@@ -452,7 +452,7 @@ def api_config_save(request):
 @login_required
 @user_passes_test(lambda u: u.is_superuser or u.is_staff)
 def api_config_test(request):
-    """Uji koneksi untuk satu section (sqlite/postgres/redis/ai)."""
+    """Uji koneksi untuk satu section (sqlite/postgres/redis/ai/email)."""
     section = request.GET.get("section", "")
     cfg = _apotek_apps_config()
     result = {"section": section, "status": "unknown", "detail": ""}
@@ -489,6 +489,18 @@ def api_config_test(request):
                 result.update(status="healthy", detail="AI merespons")
             except Exception as e:
                 result.update(status="critical", detail=f"gagal: {e}")
+    elif section == "email":
+        email_cfg = _apotekapps_email_config()
+        if not email_cfg:
+            result.update(status="warning", detail="SMTP belum dikonfigurasi di ApotekApps")
+        else:
+            host = email_cfg.get("host", "")
+            port = email_cfg.get("port", "")
+            if not host:
+                result.update(status="warning", detail="SMTP host kosong")
+            else:
+                status, detail, meta = _probe_email()
+                result.update(status=status, detail=detail, **meta)
     else:
         return JsonResponse({"error": "Section tidak dikenal."}, status=400)
 
@@ -1593,9 +1605,12 @@ def _probe_media():
 
 @_ttl_cache()
 def _probe_nginx():
-    """Probe Nginx: process running + listening on :80/:443.
+    """Probe Nginx + ApotekApps reverse proxy: process running + listening on :80/:443/:8080/:8000.
 
     Returns (status, detail, meta). status is healthy|warning|critical.
+    Falls back to port-based detection when pgrep is unavailable (e.g. Windows).
+    If the Django/Python server is reachable on :8000 even without nginx,
+    the service is considered healthy (dev-server mode).
     """
     import shutil
     import subprocess
@@ -1604,18 +1619,15 @@ def _probe_nginx():
     nginx_bin = shutil.which("nginx")
     meta["binary"] = nginx_bin or "not found"
 
-    # 1) is nginx running?
+    nginx_running = False
     try:
         out = subprocess.run(
             ["pgrep", "-f", "nginx: master"],
             capture_output=True, text=True, timeout=2,
         )
-        running = out.returncode == 0
+        nginx_running = out.returncode == 0
     except Exception:
-        running = False
-
-    if not running:
-        return "critical", "nginx not running", meta
+        nginx_running = False
 
     # 2) is it listening on 80/443?
     listening_80 = listening_443 = False
@@ -1633,12 +1645,37 @@ def _probe_nginx():
     except Exception:
         pass
 
-    if listening_80 or listening_443:
+    if nginx_running or listening_80 or listening_443:
         ports = []
         if listening_80: ports.append("80")
         if listening_443: ports.append("443")
-        return "healthy", f"running · :{'+'.join(ports)}", meta
-    return "warning", "running but no listener on 80/443", meta
+        detail = f"running · :{'+'.join(ports)}" if ports else "running (process detected)"
+        return "healthy", detail, meta
+
+    # 3) Fallback: check ApotekApps nginx port (8080) and Django dev server (8000).
+    #    The reverse proxy sits in front of apps_api, so if either is reachable
+    #    the API is still servable.
+    listening_8080 = listening_8000 = False
+    try:
+        import socket
+        for port in (8080, 8000):
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=2):
+                    if port == 8080: listening_8080 = True
+                    elif port == 8000: listening_8000 = True
+            except Exception:
+                pass
+        meta["port_8080"] = listening_8080
+        meta["port_8000"] = listening_8000
+    except Exception:
+        pass
+
+    if listening_8080:
+        return "healthy", f"nginx port reachable · :8080", meta
+    if listening_8000:
+        return "healthy", "Django dev server reachable · :8000 (nginx not detected, dev mode)", meta
+
+    return "critical", "nginx not running (and no reverse proxy on 8080/8000)", meta
 
 
 def _probe_ingress(status, detail, meta):
@@ -2053,12 +2090,27 @@ def api_topology_json(request):
         "status": media_status, "detail": media_detail,
         "path": media_meta.get("path"), "files": media_meta.get("files"),
     })
-    # apps_api health depends on both DBs + recent ping success
+    # apps_api health depends on both DBs + recent ping success + server reachability
     recent_all = APIRequestLog.objects.filter(created_at__gte=since)
     recent_total = recent_all.count()
     recent_fail = recent_all.filter(status__in=["fail", "error"]).count()
     db_critical_count = sum(status == "critical" for status in (db_status, db_secondary_status))
-    if db_critical_count == 2 or (recent_total and (recent_fail / recent_total) > 0.5):
+
+    # Check if the ApotekApps API server is actually serving requests.
+    # If the server is unreachable (port 8000/8080 closed), that's a hard failure.
+    import socket as _sock
+    api_port_open = False
+    for _port in (8000, 8080):
+        try:
+            with _sock.create_connection(("127.0.0.1", _port), timeout=2):
+                api_port_open = True
+                break
+        except Exception:
+            pass
+
+    if not api_port_open:
+        apps_status = "critical"
+    elif db_critical_count == 2 or (recent_total and (recent_fail / recent_total) > 0.5):
         apps_status = "critical"
     elif db_critical_count == 1 or (recent_total and (recent_fail / recent_total) > 0.2):
         apps_status = "warning"
@@ -2743,6 +2795,7 @@ def _build_suggestions(queries, tables, indexes):
                 "type": "slow_query",
                 "severity": "critical" if q["mean_ms"] > 2000 else "warning",
                 "table": None,
+                "table_label": "database-wide",
                 "action": "EXPLAIN ANALYZE",
                 "detail": f"Query mean {q['mean_ms']}ms over {q['calls']} calls. "
                           f"Run EXPLAIN (ANALYZE, BUFFERS) to find the bottleneck.",
