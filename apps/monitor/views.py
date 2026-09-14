@@ -2296,21 +2296,19 @@ def api_topology_json(request):
     edges.append({"from": "system", "to": "email", "requests_5m": 0, "status": system_status,
                   "label": "hosts"})
 
-    # Member card — loyalty monitoring (member count + total poin from PostgreSQL)
-    # Sama seperti node modul: "idle" bila tidak ada aktivitas terbaru, "warning"
-    # hanya bila pembacaan data gagal.
+    # Member API — external loyalty service (lives on a separate host)
     member_count = pg.get("members")
     member_points = pg.get("points")
     member_status = "idle" if member_count is not None else "warning"
     nodes.append({
-        "id": "member", "label": "Member", "kind": "service",
-        "tech": "Loyalty · Poin", "status": member_status,
+        "id": "member", "label": "Member API", "kind": "service",
+        "tech": "External API · Loyalty · Poin", "status": member_status,
         "members": member_count, "points": member_points,
         "detail": (f"Member: {member_count} · Poin: {member_points}"
-                   if member_count is not None else "data tidak tersedia"),
+                    if member_count is not None else "data tidak tersedia"),
     })
     edges.append({"from": "pg", "to": "member", "requests_5m": 0, "status": member_status,
-                  "label": "members"})
+                  "label": "members", "tech": "external API"})
 
     # overall health — 4xx is "reachable" (endpoint responded), not an outage.
     total_all = APIRequestLog.objects.filter(created_at__gte=since).count()
