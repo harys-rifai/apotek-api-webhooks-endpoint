@@ -1077,18 +1077,20 @@
     return P.healthy;
   }
 
-  function spawnPacket(edgeKey, color) {
+  function spawnPacket(edgeKey, color, reverse, delay) {
     const ed = edgeState.find(x => x.key === edgeKey);
     if (!ed) return;
     const p = el("circle", { r: 4, fill: color, opacity: .95,
       style: "filter:drop-shadow(0 0 6px " + color + ")" });
     edgesLayer.appendChild(p);
     const dur = 700; // ms
-    const start = performance.now();
+    const start = performance.now() + (delay || 0);
     function step(now) {
       const t = Math.min(1, (now - start) / dur);
-      // follow the same cubic bezier as the edge path (pointOnPath)
-      const pt = pointOnPath(ed.a, ed.b, t);
+      if (t < 0) { requestAnimationFrame(step); return; }
+      // follow the same cubic bezier as the edge path (pointOnPath);
+      // reverse traverses from b → a (the response / return direction)
+      const pt = reverse ? pointOnPath(ed.b, ed.a, t) : pointOnPath(ed.a, ed.b, t);
       p.setAttribute("cx", pt.x); p.setAttribute("cy", pt.y);
       p.setAttribute("opacity", (1 - t * 0.7).toFixed(2));
       if (t < 1) requestAnimationFrame(step);
@@ -1099,13 +1101,25 @@
 
   function handlePacket(p) {
     netPkts++; netInWindowInc();
+    // Response delay staggered by the real response time (clamped) so the
+    // return packet visibly chases the request back through the chain.
+    const rt = p.response_time_ms || 500;
+    const respDelay = Math.min(Math.max(rt, 200), 1200);
     if (p.type === "webhook") {
       netWh++;
-      spawnPacket("apps_api->monitor", edgeColorForPacket(p));
+      const c = edgeColorForPacket(p);
+      // webhook: request apps_api → monitor, then response monitor → apps_api
+      spawnPacket("apps_api->monitor", c);
+      spawnPacket("apps_api->monitor", c, true, respDelay);
     } else {
       netReq++;
-      spawnPacket("nginx->apps_api", edgeColorForPacket(p));
-      spawnPacket("apps_api->svc_" + p.module, edgeColorForPacket(p));
+      const c = edgeColorForPacket(p);
+      // request path (forward):  nginx → apps_api → svc_<module>
+      spawnPacket("nginx->apps_api", c);
+      spawnPacket("apps_api->svc_" + p.module, c, false, 200);
+      // response path (reverse): svc_<module> → apps_api → nginx
+      spawnPacket("apps_api->svc_" + p.module, c, true, respDelay + 200);
+      spawnPacket("nginx->apps_api", c, true, respDelay + 900);
     }
     netPktsEl.textContent = netPkts;
     netReqEl.textContent = netReq;
