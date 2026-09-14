@@ -43,6 +43,10 @@ urlpatterns = [
     path("api/backup/sync/", views.api_backup_sync, name="api_backup_sync"),
     path("api/topology/layout/", views.api_topology_layout, name="api_topology_layout"),
     path("api/network/stream/", views.api_network_stream, name="api_network_stream"),
+    # Maintenance Mode
+    path("api/maintenance/status/", views.api_maintenance_status, name="api_maintenance_status"),
+    path("api/maintenance/toggle/", views.api_maintenance_toggle, name="api_maintenance_toggle"),
+    path("api/maintenance/end/", views.api_maintenance_end, name="api_maintenance_end"),
     path("api/alerts/", views.api_alerts_json, name="api_alerts_json"),
     path("api/alert/record/", views.api_alert_record, name="api_alert_record"),
     path("api/alert/mark-read/", views.api_alert_mark_read, name="api_alert_mark_read"),

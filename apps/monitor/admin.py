@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
-                     AiInsight, NodeLayout, AIConfig, AIChatLog)
+                     AiInsight, NodeLayout, AIConfig, AIChatLog, MaintenanceMode)
 
 
 @admin.register(NodeLayout)
@@ -63,3 +63,15 @@ class AIChatLogAdmin(admin.ModelAdmin):
     list_filter = ["chat_type", "role"]
     search_fields = ["content", "session_id"]
     readonly_fields = ["created_at"]
+
+
+@admin.register(MaintenanceMode)
+class MaintenanceModeAdmin(admin.ModelAdmin):
+    list_display = ["is_active", "until", "service", "updated_at"]
+    readonly_fields = ["updated_at"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

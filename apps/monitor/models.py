@@ -405,3 +405,53 @@ class AIChatLog(models.Model):
 
     def __str__(self):
         return f"[{self.chat_type}] {self.role}: {self.content[:40]}"
+
+
+class MaintenanceMode(models.Model):
+    """Global maintenance-mode state. Singleton (id=1)."""
+    is_active = models.BooleanField(default=False)
+    until = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Maintenance ends at this time (null = indefinite).")
+    service = models.CharField(
+        max_length=120, default="ApotekApps API",
+        help_text="Service undergoing maintenance (displayed to users).")
+    reason = models.TextField(
+        blank=True, default="",
+        help_text="Human-readable reason shown on the splash page.")
+    affected_services = models.TextField(
+        blank=True, default="",
+        help_text="Comma-separated list of affected endpoints/modules.")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Maintenance Mode"
+        verbose_name_plural = "Maintenance Mode"
+
+    def __str__(self):
+        return f"Maintenance: {'ON' if self.is_active else 'OFF'}"
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @classmethod
+    def is_enabled(cls):
+        try:
+            return cls.get().is_active
+        except Exception:
+            return False
+
+    @classmethod
+    def state(cls):
+        m = cls.get()
+        now = timezone.now()
+        expired = m.until and m.until < now
+        return {
+            "is_active": m.is_active and not expired,
+            "until": m.until.isoformat() if m.until else None,
+            "service": m.service,
+            "reason": m.reason,
+            "affected_services": m.affected_services,
+        }

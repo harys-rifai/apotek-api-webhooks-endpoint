@@ -17,6 +17,8 @@ venv/
 db.sqlite3.prerestore_*
 # snapshot backup otomatis (berisi data, jangan di-commit)
 backups/
+# shared maintenance state file (runtime, written by toggle)
+maintenance_state.json
 
 # Keep README screenshot
 !img/monitoringSystem.png

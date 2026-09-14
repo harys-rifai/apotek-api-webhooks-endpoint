@@ -108,6 +108,31 @@
     </div>
   </div>
 
+  <!-- Maintenance Mode Control -->
+  <div class="maint-card" style="margin-bottom:1rem;">
+    <h2 style="display:flex;align-items:center;gap:.4rem;">
+      <i class="fa-solid fa-wrench"></i> Maintenance Mode
+    </h2>
+    <p class="maint-meta" id="maintStatusText" style="margin:.3rem 0;">
+      <span class="status-dot unknown" id="maintStatusDot"></span>
+      <span id="maintStatusLabel">Memuat…</span>
+    </p>
+    <p class="maint-meta" id="maintDetailText" style="margin:.2rem 0;font-size:.68rem;"></p>
+    <div class="maint-actions">
+      <button class="btn btn--danger" id="maintToggleBtn" onclick="toggleMaintenance()">
+        <i class="fa-solid fa-power-off"></i> <span id="maintToggleText">Aktifkan Maintenance</span>
+      </button>
+      <button class="btn btn--secondary" id="maintEndBtn" style="display:none;" onclick="endMaintenance()">
+        <i class="fa-solid fa-hand-paper"></i> Akhiri Sekarang
+      </button>
+    </div>
+    <div style="margin-top:.5rem;">
+      <input type="text" id="maintService" class="maint-input" placeholder="Service (default: ApotekApps API)" style="width:100%;padding:.25rem .4rem;border:1px solid var(--color-border,#2a2a40);border-radius:6px;background:rgba(255,255,255,.05);color:var(--color-text,#eaeaff);font-size:.68rem;">
+      <input type="datetime-local" id="maintUntil" style="width:100%;margin-top:.2rem;padding:.25rem .4rem;border:1px solid var(--color-border,#2a2a40);border-radius:6px;background:rgba(255,255,255,.05);color:var(--color-text,#eaeaff);font-size:.68rem;">
+      <textarea id="maintReason" placeholder="Alasan maintenance…" style="width:100%;margin-top:.2rem;padding:.25rem .4rem;border:1px solid var(--color-border,#2a2a40);border-radius:6px;background:rgba(255,255,255,.05);color:var(--color-text,#eaeaff);font-size:.68rem;height:50px;"></textarea>
+    </div>
+  </div>
+
   <div class="maint-grid">
     <div class="maint-card">
       <h2><i class="fa-solid fa-hard-drive"></i> SQLite</h2>
@@ -325,5 +350,123 @@ function getCookie(name) {
   const m = document.cookie.match(new RegExp('(^|;)\\s*' + name + '=([^;]+)'));
   return m ? m[2] : '';
 }
+
+// ── Maintenance Mode ─────────────────────────────────────────────────────
+const MAINT_URLS = {
+  status: '{% url "api_maintenance_status" %}',
+  toggle: '{% url "api_maintenance_toggle" %}',
+  end: '{% url "api_maintenance_end" %}',
+};
+
+async function fetchMaintState() {
+  try {
+    const res = await fetch(MAINT_URLS.status, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await res.json();
+    renderMaintState(data);
+  } catch(e) {
+    const d = document.getElementById('maintStatusLabel');
+    if (d) d.textContent = 'Gagal memuat status';
+  }
+}
+
+function renderMaintState(s) {
+  const dot = document.getElementById('maintStatusDot');
+  const label = document.getElementById('maintStatusLabel');
+  const detail = document.getElementById('maintDetailText');
+  const endBtn = document.getElementById('maintEndBtn');
+  const toggleBtn = document.getElementById('maintToggleBtn');
+  const toggleText = document.getElementById('maintToggleText');
+
+  if (s.is_active) {
+    dot.className = 'status-dot warning';
+    label.textContent = 'MAINTENANCE AKTIF';
+    if (s.until) {
+      detail.textContent = `Sistem dalam pemeliharaan sampai ${s.until} untuk service ${s.service || '—'}`;
+    } else {
+      detail.textContent = `Sistem dalam pemeliharaan untuk service ${s.service || '—'}`;
+    }
+    if (s.reason) detail.textContent += ` · ${s.reason}`;
+    endBtn.style.display = 'inline-flex';
+    toggleBtn.classList.remove('btn--danger');
+    toggleBtn.classList.add('btn--success');
+    toggleText.textContent = 'Nonaktifkan Maintenance';
+  } else {
+    dot.className = 'status-dot healthy';
+    label.textContent = 'Maintenance OFF';
+    detail.textContent = '';
+    endBtn.style.display = 'none';
+    toggleBtn.classList.remove('btn--success');
+    toggleBtn.classList.add('btn--danger');
+    toggleText.textContent = 'Aktifkan Maintenance';
+  }
+}
+
+async function toggleMaintenance() {
+  // fetch current state first to know what we're toggling
+  let currentActive = false;
+  try {
+    const r = await fetch(MAINT_URLS.status, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const s = await r.json();
+    currentActive = s.is_active;
+  } catch(e) {}
+
+  const service = document.getElementById('maintService').value.trim();
+  const until = document.getElementById('maintUntil').value;
+  const reason = document.getElementById('maintReason').value.trim();
+  const btn = document.getElementById('maintToggleBtn');
+  setBusy(btn, true);
+  try {
+    const res = await fetch(MAINT_URLS.toggle, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
+                 'X-CSRFToken': getCookie('csrftoken') },
+      body: JSON.stringify({
+        is_active: !currentActive,
+        until: until || null,
+        service: service || undefined,
+        reason: reason || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      window._maintActive = data.is_active;
+      appendTerm('<span style="color:' + (data.is_active ? '#ff9f43' : '#36ff9e') + '">' +
+        (data.is_active ? '✓ Maintenance mode aktif' : '✓ Maintenance mode nonaktif') + '</span>');
+      fetchMaintState();
+    } else {
+      appendTerm('<span style="color:#ff4d6d">✗ ' + (data.error || 'Gagal') + '</span>');
+    }
+  } catch(e) {
+    appendTerm('<span style="color:#ff4d6d">✗ Error: ' + e.message + '</span>');
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+async function endMaintenance() {
+  const btn = document.getElementById('maintEndBtn');
+  setBusy(btn, true);
+  try {
+    const res = await fetch(MAINT_URLS.end, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCookie('csrftoken') },
+    });
+    const data = await res.json();
+    if (data.ok) {
+      window._maintActive = false;
+      appendTerm('<span style="color:#36ff9e">✓ Maintenance mode diakhiri</span>');
+      fetchMaintState();
+    }
+  } catch(e) {
+    appendTerm('<span style="color:#ff4d6d">✗ Error: ' + e.message + '</span>');
+  } finally {
+    setBusy(btn, false);
+  }
+}
+
+// Init: load current state on page load
+window._maintActive = false;
+fetchMaintState();
+setInterval(fetchMaintState, 10000); // refresh status every 10s
 </script>
 {% endblock %}

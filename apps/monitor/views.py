@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import threading
 from datetime import timedelta
@@ -55,8 +56,8 @@ def _ttl_cache(ttl=_PROBE_TTL):
     return deco
 
 from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
-                      AiInsight, NodeLayout, AIConfig, AIChatLog,
-                      ConnectionConfig)
+                       AiInsight, NodeLayout, AIConfig, AIChatLog,
+                       ConnectionConfig, MaintenanceMode)
 from .services import call_api
 from .ai_insight import generate_ai_insight
 from .ai_chat import call_ai_chat
@@ -3116,3 +3117,70 @@ def webhook_receiver(request):
         return JsonResponse({"received": True})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
+
+
+# ── Maintenance Mode ─────────────────────────────────────────────────────────
+
+def _write_shared_state(state):
+    """Write maintenance state to a shared JSON file so external services
+    (e.g. ApotekApps on port 8000) can read it without a shared DB."""
+    try:
+        _state_file = os.environ.get(
+            "MAINTENANCE_STATE_FILE",
+            os.path.join(settings.BASE_DIR, "maintenance_state.json"),
+        )
+        with open(_state_file, "w") as f:
+            json.dump(state, f)
+    except Exception:
+        pass
+
+
+def api_maintenance_status(request):
+    """Return current maintenance state (public — for health checks & splash)."""
+    state = MaintenanceMode.state()
+    return JsonResponse({"ok": True, **state})
+
+
+@login_required
+@require_POST
+def api_maintenance_toggle(request):
+    """Enable/disable maintenance mode. POST body:
+    { is_active, until (ISO or null), service, reason, affected_services }
+    """
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        return JsonResponse({"ok": False, "error": "invalid json"}, status=400)
+
+    m = MaintenanceMode.get()
+    m.is_active = bool(payload.get("is_active"))
+    until_raw = payload.get("until")
+    if until_raw:
+        try:
+            m.until = timezone.datetime.fromisoformat(until_raw.rstrip("Z"))
+        except (ValueError, AttributeError):
+            m.until = None
+    else:
+        m.until = None
+    m.service = payload.get("service", m.service) or "ApotekApps API"
+    m.reason = payload.get("reason", m.reason) or ""
+    m.affected_services = payload.get("affected_services", m.affected_services) or ""
+    m.save()
+
+    # propagate to shared file for external services
+    state = MaintenanceMode.state()
+    _write_shared_state(state)
+
+    return JsonResponse({"ok": True, **state})
+
+
+@login_required
+@require_POST
+def api_maintenance_end(request):
+    """Quick action: end maintenance mode immediately."""
+    m = MaintenanceMode.get()
+    m.is_active = False
+    m.until = None
+    m.save()
+    _write_shared_state(MaintenanceMode.state())
+    return JsonResponse({"ok": True, **MaintenanceMode.state()})
