@@ -1997,6 +1997,53 @@ def api_email_monitor(request):
     })
 
 
+def _record_topology_alerts(db_status, db_secondary_status, redis_status,
+                            nginx_status, apps_status, ingress_status):
+    """Record alerts when core services transition to/from critical/warning.
+
+    Uses a module-level dict as a simple state tracker so alerts are only
+    raised on state *changes*, not on every poll.
+    """
+    services = {
+        "PostgreSQL Primary": db_status,
+        "PostgreSQL Secondary": db_secondary_status,
+        "Redis Cache": redis_status,
+        "Nginx": nginx_status,
+        "ApotekApps API": apps_status,
+        "Ingress": ingress_status,
+    }
+    state = _topology_alert_state
+    for name, status in services.items():
+        prev = state.get(name)
+        if prev is not None and prev == status:
+            continue
+        if status == "critical":
+            Alert.objects.create(
+                level=Alert.LEVEL_CRITICAL,
+                title=f"{name} down",
+                message=f"Service status changed to critical.",
+                source="topology",
+            )
+        elif status == "warning":
+            Alert.objects.create(
+                level=Alert.LEVEL_WARNING,
+                title=f"{name} degraded",
+                message=f"Service status changed to warning.",
+                source="topology",
+            )
+        elif status == "healthy" and prev in ("critical", "warning"):
+            Alert.objects.create(
+                level=Alert.LEVEL_SUCCESS,
+                title=f"{name} recovered",
+                message=f"Service status is back to healthy.",
+                source="topology",
+            )
+        state[name] = status
+
+
+_topology_alert_state: dict = {}
+
+
 @login_required
 def api_topology_json(request):
     """Dynatrace-style smartscape: services as nodes, traffic as edges, live health."""
@@ -2179,9 +2226,16 @@ def api_topology_json(request):
         ).count()
         avg = q.aggregate(a=Avg("response_time_ms"))["a"] or 0
         rate = round(reachable / total * 100, 1) if total else 100
-        status = "healthy" if rate >= 95 else ("warning" if rate >= 80 else "critical")
         if total == 0:
-            status = "idle"
+            # No recent logs — if the API server is reachable, mark the module
+            # as healthy (online) rather than idle. Only mark critical if the
+            # API itself is unreachable.
+            if not api_port_open:
+                status = "critical"
+            else:
+                status = "healthy"
+        else:
+            status = "healthy" if rate >= 95 else ("warning" if rate >= 80 else "critical")
         nodes.append({
             "id": f"svc_{mod}", "label": mod.capitalize(), "kind": "service",
             "tech": f"{len(ep_list)} endpoints",
@@ -2262,6 +2316,12 @@ def api_topology_json(request):
         overall_status = "warning"
     else:
         overall_status = "healthy"
+
+    # ── Record alerts for core service status changes ──
+    _record_topology_alerts(
+        db_status, db_secondary_status, redis_status, nginx_status,
+        apps_status, ingress_status,
+    )
 
     return JsonResponse({
         "nodes": nodes,
