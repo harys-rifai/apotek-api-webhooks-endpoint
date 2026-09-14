@@ -254,7 +254,7 @@
 .ta-right { text-align: right; }
 
 /* page layout (user management) */
-.page { padding: 24px; max-width: 1100px; margin: 0 auto; }
+.page { padding: 24px; max-width: 1600px; margin: 0 auto; }
 .page__head {
   display: flex; align-items: flex-end; justify-content: space-between;
   gap: 12px; margin-bottom: 18px; flex-wrap: wrap;
