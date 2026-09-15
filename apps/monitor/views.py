@@ -58,6 +58,7 @@ def _ttl_cache(ttl=_PROBE_TTL):
 from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
                        AiInsight, NodeLayout, AIConfig, AIChatLog,
                        ConnectionConfig, MaintenanceMode)
+from .security import decrypt_secret, mask_url
 from .services import call_api
 from .ai_insight import generate_ai_insight
 from .ai_chat import call_ai_chat
@@ -442,7 +443,7 @@ def api_config_save(request):
             "pg_secondary_host": cc.pg_secondary_host, "pg_secondary_port": cc.pg_secondary_port,
             "pg_secondary_name": cc.pg_secondary_name, "pg_secondary_user": cc.pg_secondary_user,
             "pg_secondary_password_masked": cc.mask_pg_secondary_password(),
-            "redis_url": cc.redis_url,
+            "redis_url_masked": mask_url(cc.redis_url),
             "redis_password_masked": cc.mask_redis_password(),
             "ai_enabled": cc.ai_enabled, "ai_base_url": cc.ai_base_url,
             "ai_model": cc.ai_model, "ai_api_key_masked": cc.mask_ai_key(),
@@ -481,7 +482,8 @@ def api_config_test(request):
             result.update(status="critical", detail=str(e))
     elif section == "ai":
         ai = _effective_ai_config()
-        if not ai.enabled or not ai.api_key or not ai.base_url:
+        api_key = decrypt_secret(ai.api_key)
+        if not ai.enabled or not api_key or not ai.base_url:
             result.update(status="warning", detail="AI belum diaktifkan/terisi lengkap")
         else:
             try:
@@ -520,7 +522,7 @@ def api_config_ai_autodiscover(request):
     cc = ConnectionConfig.get_active()
     ai = AIConfig.get_active()
     base_url = cc.ai_base_url or ai.base_url
-    api_key = cc.ai_api_key or ai.api_key
+    api_key = decrypt_secret(cc.ai_api_key or ai.api_key)
     if not base_url or not api_key:
         return JsonResponse(
             {"ok": False, "error": "Isi & simpan Base URL dan API Key AI dulu."},
@@ -1084,7 +1086,7 @@ def _effective_ai_config():
     if cc.ai_model:
         ai.model = cc.ai_model
     if cc.ai_api_key:
-        ai.api_key = cc.ai_api_key
+        ai.api_key = decrypt_secret(cc.ai_api_key)
     if cc.ai_enabled:
         # hanya nyalakan bila user mengaktifkan di ConnectionConfig
         ai.enabled = True
@@ -1192,9 +1194,9 @@ def _apotek_apps_config():
         if cc.pg_user:
             overrides["DB_USER"] = cc.pg_user
         if cc.pg_password:
-            overrides["DB_PASSWORD"] = cc.pg_password
+            overrides["DB_PASSWORD"] = decrypt_secret(cc.pg_password)
         if cc.redis_url:
-            overrides["REDIS_URL"] = cc.redis_url
+            overrides["REDIS_URL"] = decrypt_secret(cc.redis_url)
 
     def getter(key, default=None):
         if key in overrides:
@@ -1279,8 +1281,9 @@ def _get_both_postgres_configs():
             primary['user'] = cc.pg_user
             secondary['user'] = cc.pg_user
         if cc.pg_password:
-            primary['password'] = cc.pg_password
-            secondary['password'] = cc.pg_password
+            primary_password = decrypt_secret(cc.pg_password)
+            primary['password'] = primary_password
+            secondary['password'] = primary_password
         if cc.pg_secondary_host:
             secondary['host'] = cc.pg_secondary_host
         if cc.pg_secondary_port:
@@ -1290,7 +1293,7 @@ def _get_both_postgres_configs():
         if cc.pg_secondary_user:
             secondary['user'] = cc.pg_secondary_user
         if cc.pg_secondary_password:
-            secondary['password'] = cc.pg_secondary_password
+            secondary['password'] = decrypt_secret(cc.pg_secondary_password)
 
     # Fix: if primary and secondary have the same port (common when ApotekApps/.env
     # has DB_PORT=5006 in both sections), probe for the actual standby port.

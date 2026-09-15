@@ -50,6 +50,13 @@ class MonitorProfile(models.Model):
         verbose_name = "Monitor Profile"
         verbose_name_plural = "Monitor Profiles"
 
+    def save(self, *args, **kwargs):
+        for field_name in ("apotek_access", "apotek_refresh"):
+            value = getattr(self, field_name)
+            if value:
+                setattr(self, field_name, encrypt_secret(value))
+        super().save(*args, **kwargs)
+
     def set_token(self, access, refresh=None, ttl=86400):
         """Simpan JWT ApotekApps (cached, bukan password lokal)."""
         import time
@@ -62,7 +69,7 @@ class MonitorProfile(models.Model):
     def get_access_token(self):
         import time
         if self.apotek_access and time.time() < self.apotek_token_exp - 30:
-            return self.apotek_access
+            return decrypt_secret(self.apotek_access)
         return None
 
     def __str__(self):

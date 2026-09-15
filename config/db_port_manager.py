@@ -320,13 +320,14 @@ def get_active_pg_config():
     """
     try:
         from apps.monitor.models import ConnectionConfig
+        from apps.monitor.security import decrypt_secret
         active = ConnectionConfig.objects.using("default").first()
         if active and active.pg_port:
             return {
                 "ENGINE": "django.db.backends.postgresql",
                 "NAME": active.pg_name or "apotek_pos",
                 "USER": active.pg_user or "postgres",
-                "PASSWORD": active.pg_password or "",
+                "PASSWORD": decrypt_secret(active.pg_password) if active.pg_password else "",
                 "HOST": active.pg_host or "localhost",
                 "PORT": str(active.pg_port),
             }

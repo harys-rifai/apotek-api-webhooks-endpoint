@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 
 from .models import AIConfig
+from .security import decrypt_secret
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,8 @@ def call_ai_chat(messages, config=None, temperature=0.4):
     bila gagal / belum dikonfigurasi.
     """
     config = config or AIConfig.get_active()
-    if not config.enabled or not config.base_url or not config.api_key:
+    api_key = decrypt_secret(config.api_key)
+    if not config.enabled or not config.base_url or not api_key:
         raise RuntimeError("AI belum dikonfigurasi atau dinonaktifkan.")
 
     url = config.base_url.rstrip("/") + "/chat/completions"
@@ -37,7 +39,7 @@ def call_ai_chat(messages, config=None, temperature=0.4):
         data=data,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {config.api_key}",
+            "Authorization": f"Bearer {api_key}",
         },
         method="POST",
     )
