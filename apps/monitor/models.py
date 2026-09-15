@@ -239,7 +239,7 @@ class AIConfig(models.Model):
     bila ``enabled=False`` atau kredensial kosong.
     """
 
-    api_key = models.CharField(max_length=255, blank=True, default="")
+    api_key = models.CharField(max_length=512, blank=True, default="")
     base_url = models.CharField(
         max_length=255, blank=True, default="",
         help_text="Base URL router AI (OpenAI-compatible), mis. http://localhost:20128/v1",
@@ -305,18 +305,18 @@ class ConnectionConfig(models.Model):
     pg_port = models.IntegerField(blank=True, null=True)
     pg_name = models.CharField(max_length=255, blank=True, default="")
     pg_user = models.CharField(max_length=255, blank=True, default="")
-    pg_password = models.CharField(max_length=255, blank=True, default="")
+    pg_password = models.CharField(max_length=512, blank=True, default="")
 
     # PostgreSQL Secondary (standy replica)
     pg_secondary_host = models.CharField(max_length=255, blank=True, default="")
     pg_secondary_port = models.IntegerField(blank=True, null=True)
     pg_secondary_name = models.CharField(max_length=255, blank=True, default="")
     pg_secondary_user = models.CharField(max_length=255, blank=True, default="")
-    pg_secondary_password = models.CharField(max_length=255, blank=True, default="")
+    pg_secondary_password = models.CharField(max_length=512, blank=True, default="")
 
     # Redis
     redis_url = models.CharField(
-        max_length=512, blank=True, default="",
+        max_length=1024, blank=True, default="",
         help_text="redis://[:password@]host:port/db — kosongkan untuk default.",
     )
 

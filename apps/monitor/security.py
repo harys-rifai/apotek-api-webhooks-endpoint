@@ -2,7 +2,6 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
 from urllib.parse import urlunparse, urlparse
 
 

@@ -144,7 +144,7 @@
           <div class="form-group">
             <label for="redis_url">Redis URL</label>
             <input type="text" id="redis_url" name="redis_url" class="form-control"
-                   value="{{ cfg.redis_url }}" placeholder="redis://127.0.0.1:6379/1"/>
+                   value="{{ cfg.plaintext_redis_url }}" placeholder="redis://127.0.0.1:6379/1"/>
             <small class="hint">Format: <code>redis://[:password@]host:port/db</code>. Kosongkan untuk default.</small>
           </div>
           <div class="form-actions">

@@ -1011,47 +1011,15 @@ def api_db_sqlite_vacuum(request):
 @require_POST
 def api_db_redis_flush(request):
     """Jalankan FLUSHDB pada Redis (db terpilih) untuk membersihkan cache."""
-    import socket
-    import time
-
     cfg = _apotek_apps_config()
-    url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
+    url = decrypt_secret(cfg("REDIS_URL", "redis://127.0.0.1:6379/1"))
     info = _parse_redis_url(url)
 
-    def encode(*args):
-        out = f"*{len(args)}\r\n".encode()
-        for a in args:
-            a = str(a).encode()
-            out += b"$%d\r\n%s\r\n" % (len(a), a)
-        return out
-
     try:
-        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
-            if info["ssl"]:
-                import ssl as _ssl
-                sock = _ssl.create_default_context().wrap_socket(
-                    sock, server_hostname=info["host"]
-                )
-            sock.settimeout(2)
-            payload = b""
-            if info["password"]:
-                payload += encode("AUTH", info["password"])
-            payload += encode("SELECT", str(info["db"]))
-            payload += encode("FLUSHDB")
-            sock.sendall(payload)
-            raw = b""
-            deadline = time.time() + 2
-            while time.time() < deadline:
-                chunk = sock.recv(8192)
-                if not chunk:
-                    break
-                raw += chunk
-                if b"+OK" in raw or b"-" in raw:
-                    break
-        text = raw.decode(errors="replace")
-        if "+OK" in text:
+        replies, _ = _redis_execute(info, [("FLUSHDB",)], timeout=5)
+        if replies and replies[0] == "OK":
             return JsonResponse({"ok": True, "detail": f"Redis FLUSHDB selesai · db{info['db']}"})
-        return JsonResponse({"ok": False, "error": "respon tidak OK: " + text[:80]}, status=500)
+        return JsonResponse({"ok": False, "error": "respon tidak OK"}, status=500)
     except Exception as e:
         return JsonResponse({"ok": False, "error": f"Redis FLUSHDB gagal: {e}"}, status=500)
 
@@ -1093,7 +1061,7 @@ def _effective_ai_config():
     # bila ConnectionConfig pernah diisi, jangan biarkan AI mati bila
     # field enabled di ConnectionConfig false tapi ada url+key.
     if cc.ai_base_url and cc.ai_api_key and not ai.enabled:
-        ai.enabled = cc.ai_enabled
+        ai.enabled = bool(cc.ai_enabled)
     return ai
 
 
@@ -1411,69 +1379,189 @@ def _sqlite_size(path) -> int:
 
 
 @_ttl_cache()
-def _redis_size() -> dict:
-    """Return {'bytes': int|None, 'keys': int|None, 'status': ...} for Redis
-    via a raw RESP INFO+DBSIZE (no redis-py dependency required)."""
-    import socket
-    import time
-
+def _redis_snapshot() -> dict:
+    """Return one cached Redis health/size snapshot for all UI consumers."""
     cfg = _apotek_apps_config()
-    url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
+    url = decrypt_secret(cfg("REDIS_URL", "redis://127.0.0.1:6379/1"))
     info = _parse_redis_url(url)
-
-    def encode(*args):
-        out = f"*{len(args)}\r\n".encode()
-        for a in args:
-            a = str(a).encode()
-            out += b"$%d\r\n%s\r\n" % (len(a), a)
-        return out
+    meta = {"host": f"{info['host']}:{info['port']}", "db": info["db"]}
 
     try:
-        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
-            if info["ssl"]:
-                import ssl as _ssl
-                sock = _ssl.create_default_context().wrap_socket(
-                    sock, server_hostname=info["host"]
-                )
-            sock.settimeout(2)
+        replies, latency = _redis_execute(
+            info,
+            [("PING",), ("INFO", "server"), ("INFO", "memory"), ("DBSIZE",)],
+            timeout=5,
+        )
+        meta["latency_ms"] = latency
+        server_info = replies[1] if len(replies) > 1 else ""
+        memory_info = replies[2] if len(replies) > 2 else ""
+        used = None
+        if isinstance(memory_info, str):
+            for line in memory_info.splitlines():
+                if line.startswith("used_memory:"):
+                    try:
+                        used = int(line.split(":", 1)[1].strip())
+                    except ValueError:
+                        pass
+                    break
+        keys = replies[3] if len(replies) > 3 else None
+        if not replies or replies[0] != "PONG":
+            status = "critical"
+            detail = "no PONG response"
+        elif used is None:
+            status = "warning"
+            detail = "memory stats unavailable"
+        else:
+            status = "healthy"
+            detail = f"PONG {latency} ms"
+        if isinstance(server_info, str):
+            for line in server_info.splitlines():
+                if line.startswith("redis_version:"):
+                    meta["version"] = line.split(":", 1)[1].strip()
+                    break
+        return {
+            "status": status,
+            "detail": detail,
+            "meta": meta,
+            "bytes": used,
+            "keys": keys,
+        }
+    except Exception as e:
+        return {
+            "status": "critical",
+            "detail": f"unreachable: {e}. Start Redis: sh scripts/redis.sh start",
+            "meta": meta,
+            "bytes": None,
+            "keys": None,
+        }
+
+
+@_ttl_cache()
+def _redis_size() -> dict:
+    snapshot = _redis_snapshot()
+    return {
+        "bytes": snapshot["bytes"],
+        "keys": snapshot["keys"],
+        "status": snapshot["status"],
+        "detail": snapshot["detail"] if snapshot["status"] != "healthy"
+                   else f"{snapshot['meta']['host']} db{snapshot['meta'].get('db', 0)}",
+    }
+
+
+@_ttl_cache()
+def _probe_redis():
+    snapshot = _redis_snapshot()
+    return snapshot["status"], snapshot["detail"], snapshot["meta"]
+
+
+class _RedisReader:
+    def __init__(self, sock):
+        self.sock = sock
+        self.buffer = b""
+
+    def readline(self):
+        while True:
+            marker = self.buffer.find(b"\r\n")
+            if marker != -1:
+                line = self.buffer[:marker]
+                self.buffer = self.buffer[marker + 2:]
+                return line
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("Redis closed the connection")
+            self.buffer += chunk
+            if len(self.buffer) > 1024 * 1024:
+                raise ConnectionError("Redis response terlalu besar")
+
+    def read_exact(self, length):
+        while len(self.buffer) < length:
+            chunk = self.sock.recv(min(4096, length - len(self.buffer)))
+            if not chunk:
+                raise ConnectionError("Redis closed the connection")
+            self.buffer += chunk
+        data = self.buffer[:length]
+        self.buffer = self.buffer[length:]
+        if self.buffer.startswith(b"\r\n"):
+            self.buffer = self.buffer[2:]
+        return data
+
+
+def _redis_encode(*args):
+    out = f"*{len(args)}\r\n".encode()
+    for arg in args:
+        data = str(arg).encode("utf-8")
+        out += b"$%d\r\n%s\r\n" % (len(data), data)
+    return out
+
+
+def _redis_read_response(reader):
+    line = reader.readline()
+    prefix = line[:1]
+    payload = line[1:]
+    if prefix == b"+":
+        return payload.decode("utf-8", errors="replace")
+    if prefix == b"-":
+        raise ConnectionError(payload.decode("utf-8", errors="replace"))
+    if prefix == b":":
+        return int(payload)
+    if prefix == b"$":
+        length = int(payload)
+        if length == -1:
+            return None
+        return reader.read_exact(length).decode("utf-8", errors="replace")
+    if prefix == b"*":
+        return [
+            _redis_read_response(reader) for _ in range(int(payload))
+        ]
+    raise ConnectionError("Redis response tidak dikenal")
+
+
+def _redis_execute_protocol(info, commands, timeout, use_resp):
+    import socket
+    import time
+    import ssl as _ssl
+
+    started = time.time()
+    raw_sock = socket.create_connection((info["host"], info["port"]), timeout=timeout)
+    sock = raw_sock
+    if info["ssl"]:
+        sock = _ssl.create_default_context().wrap_socket(
+            raw_sock, server_hostname=info["host"]
+        )
+    try:
+        sock.settimeout(timeout)
+        if use_resp:
             payload = b""
             if info["password"]:
-                payload += encode("AUTH", info["password"])
-            payload += encode("INFO", "memory")
-            payload += encode("DBSIZE")
+                payload += _redis_encode("AUTH", info["password"])
+            payload += _redis_encode("SELECT", str(info["db"]))
+            for command in commands:
+                payload += _redis_encode(*command)
             sock.sendall(payload)
+        else:
+            if info["password"]:
+                auth = "AUTH " + info["password"].replace("\r", " ").replace("\n", " ")
+                sock.sendall((auth + "\r\n").encode("utf-8"))
+            sock.sendall(("SELECT " + str(info["db"]) + "\r\n").encode("utf-8"))
+            for command in commands:
+                args = [str(arg).replace("\r", " ").replace("\n", " ") for arg in command]
+                sock.sendall((" ".join(args) + "\r\n").encode("utf-8"))
+        reader = _RedisReader(sock)
+        setup_count = (1 if info["password"] else 0) + 1
+        replies = [_redis_read_response(reader) for _ in range(setup_count + len(commands))]
+        replies = replies[setup_count:]
+    finally:
+        sock.close()
+    return replies, round((time.time() - started) * 1000, 1)
 
-            raw = b""
-            deadline = time.time() + 2
-            while time.time() < deadline:
-                chunk = sock.recv(8192)
-                if not chunk:
-                    break
-                raw += chunk
-                if b"used_memory:" in raw and b":" in raw.split(b"used_memory:")[1][:40] and b"\r\n" in raw and b":" in raw.split(b"used_memory:")[1] and b"\r\n" in raw.split(b"used_memory:")[1]:
-                    if b"\r\n:0\r\n" in raw or b"\r\n:1\r\n" in raw or (raw.count(b"\r\n:") >= 2):
-                        break
 
-        text = raw.decode(errors="replace")
-        used = None
-        for line in text.splitlines():
-            if line.startswith("used_memory:"):
-                try:
-                    used = int(line.split(":", 1)[1].strip())
-                except ValueError:
-                    pass
-                break
-        keys = None
-        # DBSIZE response is the last integer reply "+:N\r\n"
-        replies = [int(p[1:]) for p in text.replace("\r\n", "\n").split("\n") if p.startswith(":")]
-        if replies:
-            keys = replies[-1]
-        status = "healthy" if used is not None else "warning"
-        return {"bytes": used, "keys": keys, "status": status,
-                "detail": f"{info['host']}:{info['port']} db{info['db']}"}
-    except Exception as e:
-        return {"bytes": None, "keys": None, "status": "critical",
-                "detail": f"unreachable: {e}. Start Redis: sh scripts/redis.sh start"}
+def _redis_execute(info, commands, timeout=5):
+    try:
+        return _redis_execute_protocol(info, commands, timeout, True)
+    except ConnectionError as exc:
+        if "Protocol error" not in str(exc):
+            raise
+        return _redis_execute_protocol(info, commands, timeout, False)
 
 
 def _parse_redis_url(url: str) -> dict:
@@ -1486,79 +1574,17 @@ def _parse_redis_url(url: str) -> dict:
             db = int(parsed.path.lstrip("/"))
         except ValueError:
             db = 0
+    host = parsed.hostname or "127.0.0.1"
+    if host.lower() == "localhost":
+        host = "127.0.0.1"
     return {
-        "host": parsed.hostname or "127.0.0.1",
+        "host": host,
         "port": parsed.port or 6379,
         "password": unquote(parsed.password) if parsed.password else "",
         "db": db,
         "ssl": parsed.scheme == "rediss",
     }
 
-
-@_ttl_cache()
-def _probe_redis():
-    """Probe Redis with a raw RESP PING (no redis-py dependency required).
-
-    Returns (status, detail, meta) where status is healthy|warning|critical.
-    """
-    import socket
-    import time
-
-    cfg = _apotek_apps_config()
-    url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
-    info = _parse_redis_url(url)
-    meta = {"host": f"{info['host']}:{info['port']}", "db": info["db"]}
-
-    def encode(*args):
-        out = f"*{len(args)}\r\n".encode()
-        for a in args:
-            a = str(a).encode()
-            out += b"$%d\r\n%s\r\n" % (len(a), a)
-        return out
-
-    try:
-        started = time.time()
-        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
-            if info["ssl"]:
-                import ssl as _ssl
-                sock = _ssl.create_default_context().wrap_socket(
-                    sock, server_hostname=info["host"]
-                )
-            sock.settimeout(2)
-            payload = b""
-            if info["password"]:
-                payload += encode("AUTH", info["password"])
-            payload += encode("PING")
-            payload += encode("INFO", "server")
-            sock.sendall(payload)
-
-            raw = b""
-            deadline = time.time() + 2
-            while b"+PONG" not in raw and b"-" not in raw[:1] and time.time() < deadline:
-                chunk = sock.recv(8192)
-                if not chunk:
-                    break
-                raw += chunk
-                if b"redis_version" in raw or b"-ERR" in raw or b"-NOAUTH" in raw:
-                    break
-
-        latency = round((time.time() - started) * 1000, 1)
-        meta["latency_ms"] = latency
-        text = raw.decode(errors="replace")
-
-        if "NOAUTH" in text or "WRONGPASS" in text or "invalid password" in text.lower():
-            # server is reachable but rejects the configured password → config issue, not down
-            return "warning", "auth failed (check REDIS_URL)", meta
-        if "+PONG" not in text:
-            return "critical", "no PONG response", meta
-
-        for line in text.splitlines():
-            if line.startswith("redis_version:"):
-                meta["version"] = line.split(":", 1)[1].strip()
-                break
-        return "healthy", f"PONG {latency} ms", meta
-    except Exception as e:
-        return "critical", f"unreachable: {e}. Start Redis: sh scripts/redis.sh start", meta
 
 
 @_ttl_cache()
@@ -2543,7 +2569,7 @@ def api_ai_config(request):
         if cc.ai_enabled:
             cfg.enabled = True
         elif cc.ai_base_url and cc.ai_api_key:
-            cfg.enabled = True
+            cfg.enabled = bool(cc.ai_enabled)
     return JsonResponse({"config": _ai_config_public(cfg)})
 
 
