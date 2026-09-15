@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .security import decrypt_secret, encrypt_secret, mask_secret
+
 
 class NodeLayout(models.Model):
     """Posisi manual node pada topology smartscape (default setelah di-drag)."""
@@ -264,6 +266,11 @@ class AIConfig(models.Model):
     def __str__(self):
         return f"AIConfig(enabled={self.enabled}, model={self.model or '-'})"
 
+    def save(self, *args, **kwargs):
+        if self.api_key:
+            self.api_key = encrypt_secret(self.api_key)
+        super().save(*args, **kwargs)
+
     @classmethod
     def get_active(cls):
         obj = cls.objects.first()
@@ -271,13 +278,12 @@ class AIConfig(models.Model):
             obj = cls.objects.create()
         return obj
 
+    @property
+    def plaintext_api_key(self):
+        return decrypt_secret(self.api_key)
+
     def mask_key(self):
-        if not self.api_key:
-            return ""
-        k = self.api_key
-        if len(k) <= 8:
-            return "****" + k[-2:]
-        return k[:6] + "****" + k[-4:]
+        return mask_secret(self.api_key, leading=6, trailing=4)
 
 
 class ConnectionConfig(models.Model):
@@ -326,6 +332,18 @@ class ConnectionConfig(models.Model):
         verbose_name = "Connection Config"
         verbose_name_plural = "Connection Config"
 
+    def save(self, *args, **kwargs):
+        for field_name in (
+            "pg_password",
+            "pg_secondary_password",
+            "redis_url",
+            "ai_api_key",
+        ):
+            value = getattr(self, field_name)
+            if value:
+                setattr(self, field_name, encrypt_secret(value))
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"ConnectionConfig(updated={self.updated_at:%Y-%m-%d %H:%M})"
 
@@ -336,41 +354,39 @@ class ConnectionConfig(models.Model):
             obj = cls.objects.create()
         return obj
 
+    @property
+    def plaintext_pg_password(self):
+        return decrypt_secret(self.pg_password)
+
+    @property
+    def plaintext_pg_secondary_password(self):
+        return decrypt_secret(self.pg_secondary_password)
+
+    @property
+    def plaintext_redis_url(self):
+        return decrypt_secret(self.redis_url)
+
+    @property
+    def plaintext_ai_api_key(self):
+        return decrypt_secret(self.ai_api_key)
+
     def mask_pg_password(self):
-        if not self.pg_password:
-            return ""
-        k = self.pg_password
-        if len(k) <= 4:
-            return "****"
-        return k[:2] + "****" + k[-2:]
+        return mask_secret(self.pg_password)
 
     def mask_pg_secondary_password(self):
-        if not self.pg_secondary_password:
-            return ""
-        k = self.pg_secondary_password
-        if len(k) <= 4:
-            return "****"
-        return k[:2] + "****" + k[-2:]
+        return mask_secret(self.pg_secondary_password)
 
     def mask_redis_password(self):
-        from urllib.parse import urlparse, unquote
-        if not self.redis_url:
-            return ""
-        parsed = urlparse(self.redis_url)
-        if not parsed.password:
-            return ""
-        k = unquote(parsed.password)
-        if len(k) <= 4:
+        from urllib.parse import urlparse
+
+        try:
+            parsed = urlparse(self.plaintext_redis_url)
+        except Exception:
             return "****"
-        return k[:2] + "****" + k[-2:]
+        return mask_secret(parsed.password) if parsed.password else ""
 
     def mask_ai_key(self):
-        if not self.ai_api_key:
-            return ""
-        k = self.ai_api_key
-        if len(k) <= 8:
-            return "****" + k[-2:]
-        return k[:6] + "****" + k[-4:]
+        return mask_secret(self.ai_api_key, leading=6, trailing=4)
 
 
 class AIChatLog(models.Model):

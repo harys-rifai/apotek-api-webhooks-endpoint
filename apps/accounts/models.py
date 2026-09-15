@@ -4,6 +4,8 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth import get_user_model
 
+from apps.monitor.security import decrypt_secret, encrypt_secret
+
 
 User = get_user_model()
 

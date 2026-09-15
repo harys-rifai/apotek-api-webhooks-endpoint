@@ -67,6 +67,9 @@ DATABASES = {
     }
 }
 
+DB_ENCRYPTION_KEY = config("DB_ENCRYPTION_KEY", default="")
+DB_ENCRYPTION_KEY_FILE = config("DB_ENCRYPTION_KEY_FILE", default=".encryption_key")
+
 # Optional backup replica (ApotekApps PostgreSQL). Activated automatically when
 # ApotekApps/.env exposes DB_* credentials. Uses db_port_manager for automatic
 # port failover: tries 5006 (primary) → 5008 (secondary) → 5007/5009/5432.

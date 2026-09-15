@@ -1,7 +1,9 @@
 __pycache__/
 *.py[cod]
 *.sqlite3
+!db.sqlite3
 .env
+.encryption_key
 *.log
 staticfiles/
 media/
@@ -10,9 +12,10 @@ venv/
 .venv/
 .db_initialized
 
-# SQLite WAL/SHM (dihasilkan mode WAL)
+# SQLite WAL/SHM/JOURNAL (dihasilkan mode WAL)
 *.sqlite3-wal
 *.sqlite3-shm
+*.sqlite3-journal
 # cadangan darurat restore
 db.sqlite3.prerestore_*
 # snapshot backup otomatis (berisi data, jangan di-commit)
