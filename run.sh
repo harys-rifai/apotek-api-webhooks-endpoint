@@ -155,8 +155,8 @@ echo "${CYAN}[8/8]${NC}"
 echo ""
 echo "======================================"
 echo "  ApotekMonitor v$VERSION"
-echo "  http://127.0.0.1:8090"
+echo "  http://0.0.0.0:8090 (LAN: http://<your-ip>:8090)"
 echo "  Login: admin / admin"
 echo "======================================"
 echo ""
-exec "$VENV_PYTHON" manage.py runserver 8090
+exec "$VENV_PYTHON" manage.py runserver 0.0.0.0:8090

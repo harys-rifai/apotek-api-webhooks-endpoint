@@ -173,8 +173,8 @@ echo [8/8] Starting ApotekMonitor...
 echo.
 echo ======================================
 echo   ApotekMonitor v%VERSION%
-echo   http://127.0.0.1:8090
+echo   http://0.0.0.0:8090 ^(LAN: http://YOUR-IP:8090^)
 echo   Login: admin / admin
 echo ======================================
 echo.
-"%VENV_PYTHON%" "%PROJECT_DIR%manage.py" runserver 8090
+"%VENV_PYTHON%" "%PROJECT_DIR%manage.py" runserver 0.0.0.0:8090
