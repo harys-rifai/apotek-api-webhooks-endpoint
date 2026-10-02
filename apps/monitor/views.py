@@ -745,29 +745,38 @@ def api_db_sizes(request):
         "postgres": {
             "label": "PostgreSQL Primary",
             "bytes": pg.get("bytes"),
-            "human": _human_size(pg["bytes"]) if pg.get("bytes") is not None else "n/a",
+            "human": pg.get("human", "n/a"),
             "tables": pg.get("tables"),
             "members": pg.get("members"),
             "points": pg.get("points"),
             "status": pg.get("status", "unknown"),
+            "host": pg.get("host"),
+            "port": pg.get("port"),
+            "name": pg.get("name"),
             "detail": pg.get("detail", ""),
         },
         "postgres_secondary": {
             "label": "PostgreSQL Secondary",
             "bytes": pg_secondary.get("bytes"),
-            "human": _human_size(pg_secondary.get("bytes") or 0),
+            "human": pg_secondary.get("human", "n/a"),
             "tables": pg_secondary.get("tables"),
             "members": pg_secondary.get("members"),
             "points": pg_secondary.get("points"),
             "status": pg_secondary.get("status", "unknown"),
+            "host": pg_secondary.get("host"),
+            "port": pg_secondary.get("port"),
+            "name": pg_secondary.get("name"),
             "detail": pg_secondary.get("detail", ""),
         },
         "redis": {
             "label": "Redis Cache",
             "bytes": redis.get("bytes"),
-            "human": _human_size(redis["bytes"]) if redis.get("bytes") is not None else "n/a",
+            "human": redis.get("human", "n/a"),
             "keys": redis.get("keys"),
             "status": redis.get("status", "unknown"),
+            "host": redis.get("host"),
+            "port": redis.get("port"),
+            "db": redis.get("db"),
             "detail": redis.get("detail", ""),
         },
         "server_time": timezone.now().isoformat(),
@@ -1356,7 +1365,9 @@ def _postgres_size(config) -> dict:
             )
         except ImportError:
             return {"bytes": None, "tables": None, "members": None, "points": None,
-                    "status": "unknown", "detail": "no postgres driver (psycopg/psycopg2)"}
+                    "status": "unknown", "human": "n/a",
+                    "host": host, "port": port, "name": name,
+                    "detail": "no postgres driver (psycopg/psycopg2)"}
     try:
         conn = _connect()
         with conn.cursor() as cur:
@@ -1380,10 +1391,14 @@ def _postgres_size(config) -> dict:
         conn.close()
         return {"bytes": size, "tables": tables, "members": members,
                 "points": points, "status": "healthy",
+                "human": _human_size(size),
+                "host": host, "port": port, "name": name,
                 "detail": f"{name}@{host}:{port}"}
     except Exception as e:
         return {"bytes": None, "tables": None, "members": None, "points": None,
-                "status": "critical", "detail": f"connect failed: {e}"}
+                "status": "critical", "human": "n/a",
+                "host": host, "port": port, "name": name,
+                "detail": f"connect failed: {e}"}
 
 
 @_ttl_cache()
@@ -1467,9 +1482,12 @@ def _redis_size() -> dict:
             keys = replies[-1]
         status = "healthy" if used is not None else "warning"
         return {"bytes": used, "keys": keys, "status": status,
+                "human": _human_size(used) if used is not None else "n/a",
+                "host": info["host"], "port": info["port"], "db": info["db"],
                 "detail": f"{info['host']}:{info['port']} db{info['db']}"}
     except Exception as e:
-        return {"bytes": None, "keys": None, "status": "critical",
+        return {"bytes": None, "keys": None, "status": "critical", "human": "n/a",
+                "host": info["host"], "port": info["port"], "db": info["db"],
                 "detail": f"unreachable: {e}. Start Redis: sh scripts/redis.sh start"}
 
 

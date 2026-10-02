@@ -212,7 +212,7 @@
       <p class="maint-meta">
         <span class="maint-status">
           <span class="status-dot {{ db_status.redis.status|default:'unknown' }}"></span>
-          {{ db_status.redis.detail|default:'n/a' }}
+          {{ db_status.redis.human|default:'n/a' }} · {{ db_status.redis.keys|default:'?' }} keys
         </span>
       </p>
       <div class="maint-actions">
@@ -282,13 +282,12 @@ async function refreshAllStatus() {
         }
         if (label) {
           const human = d.human || 'n/a';
-          const tables = d.tables !== null && d.tables !== undefined ? d.tables : '?';
           let html = '<span class="status-dot ' + (d.status || 'unknown') + '"></span>';
-          if (key === 'sqlite') {
-            label.innerHTML = html + ' ' + human + ' · ' + tables + ' tables';
-          } else if (key === 'redis') {
-            label.innerHTML = html + ' ' + (d.detail || 'n/a');
+          if (key === 'redis') {
+            const keys = d.keys !== null && d.keys !== undefined ? d.keys : '?';
+            label.innerHTML = html + ' ' + human + ' · ' + keys + ' keys';
           } else {
+            const tables = d.tables !== null && d.tables !== undefined ? d.tables : '?';
             label.innerHTML = html + ' ' + human + ' · ' + tables + ' tables';
           }
         }
