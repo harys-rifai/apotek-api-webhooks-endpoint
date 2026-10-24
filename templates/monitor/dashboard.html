@@ -259,21 +259,58 @@ async function loadCharts(days = 7) {
 
   if (volumeChart) volumeChart.destroy();
   volumeChart = new Chart(document.getElementById("volumeChart"), {
-    type: "bar",
+    type: "line",
     data: {
       labels,
       datasets: [
-        { label: "Success", data: daily.map(d => d.success), backgroundColor: nGreen,  stack: "s" },
-        { label: "Fail",    data: daily.map(d => d.fail),    backgroundColor: nYellow, stack: "s" },
-        { label: "Error",   data: daily.map(d => d.error),   backgroundColor: nRed,    stack: "s" },
+        {
+          label: "Total",
+          data: daily.map(d => d.total),
+          borderColor: "rgba(0, 240, 255, 0.95)",
+          backgroundColor: "rgba(0, 240, 255, 0.12)",
+          tension: 0.4,
+          fill: true,
+          borderWidth: 2,
+          pointRadius: 3,
+        },
+        {
+          label: "Success",
+          data: daily.map(d => d.success),
+          borderColor: "rgba(0, 255, 170, 0.95)",
+          backgroundColor: "transparent",
+          tension: 0.4,
+          fill: false,
+          borderWidth: 2,
+          pointRadius: 2,
+        },
+        {
+          label: "Fail",
+          data: daily.map(d => d.fail),
+          borderColor: "rgba(255, 180, 0, 0.95)",
+          backgroundColor: "transparent",
+          tension: 0.4,
+          fill: false,
+          borderWidth: 1.5,
+          pointRadius: 2,
+        },
+        {
+          label: "Error",
+          data: daily.map(d => d.error),
+          borderColor: "rgba(255, 91, 110, 0.95)",
+          backgroundColor: "transparent",
+          tension: 0.4,
+          fill: false,
+          borderWidth: 1.5,
+          pointRadius: 2,
+        },
       ],
     },
     options: {
       responsive: true, maintainAspectRatio: true,
       plugins: { legend: { position: "top", labels: { boxWidth: 10, font: { size: 11 } } } },
       scales: {
-        x: { stacked: true, ticks: { font: { size: 10 } } },
-        y: { stacked: true, ticks: { font: { size: 10 } } },
+        x: { ticks: { font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
+        y: { ticks: { font: { size: 10 } }, grid: { color: "rgba(255,255,255,0.04)" } },
       },
     },
   });

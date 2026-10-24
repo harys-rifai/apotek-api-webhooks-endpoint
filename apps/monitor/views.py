@@ -245,8 +245,11 @@ def webhook_list(request):
 def api_webhook_events(request):
     """Realtime webhook events from WebhookEvent table."""
     from .models import WebhookEvent
+    from django.utils import timezone
+    from datetime import timedelta
     limit = int(request.GET.get('limit', 50))
-    qs = WebhookEvent.objects.order_by('-received_at')[:limit]
+    now = timezone.now()
+    qs = WebhookEvent.objects.filter(received_at__gte=now - timedelta(hours=24)).order_by('-received_at')[:limit]
     events = []
     for ev in qs:
         events.append({
