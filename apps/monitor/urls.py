@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/stats/", views.api_stats_json, name="api_stats_json"),
     path("api/activity/", views.api_activity_json, name="api_activity_json"),
     path("api/db-sizes/", views.api_db_sizes, name="api_db_sizes"),
+    path("api/pg-activity/", views.api_pg_activity, name="api_pg_activity"),
     path("api/db-vacuum/", views.api_db_vacuum, name="api_db_vacuum"),
     path("api/db-vacuum-secondary/", views.api_db_vacuum_secondary, name="api_db_vacuum_secondary"),
     path("api/db-reindex/<str:db>/", views.api_db_reindex, name="api_db_reindex"),

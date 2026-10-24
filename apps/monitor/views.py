@@ -58,12 +58,25 @@ def _ttl_cache(ttl=_PROBE_TTL):
 from .models import (APIEndpoint, APIRequestLog, WebhookEvent, Alert,
                        AiInsight, NodeLayout, AIConfig, AIChatLog,
                        ConnectionConfig, MaintenanceMode)
+from .security import decrypt_secret, mask_url
 from .services import call_api
 from .ai_insight import generate_ai_insight
 from .ai_chat import call_ai_chat
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _safe_decrypt(value):
+    """Decrypt a stored secret, or None if the key is missing/wrong.
+
+    A missing DB_ENCRYPTION_KEY is an operational problem, not a reason to
+    500 a monitoring page: callers fall back to ApotekApps/.env.
+    """
+    try:
+        return decrypt_secret(value)
+    except Exception:
+        return None
+
 
 def _human_size(num: float) -> str:
     """Format a byte count into a human-readable string (KB/MB/GB/…)."""
@@ -218,15 +231,12 @@ def log_list(request):
 
 @login_required
 def webhook_list(request):
-    status_filter = request.GET.get("status", "")
-    qs = WebhookEvent.objects.all()
-    if status_filter in {"received", "processed", "failed"}:
-        qs = qs.filter(status=status_filter)
-    events = qs.order_by("-received_at")[:100]
+    """Realtime activity untuk kedua instance PostgreSQL (primary kiri, secondary kanan)."""
+    primary_cfg, secondary_cfg = _get_both_postgres_configs()
     context = {
-        "events": events,
         "active_menu": "webhooks",
-        "status_filter": status_filter,
+        "pg_primary": primary_cfg,
+        "pg_secondary": secondary_cfg,
     }
     return render(request, "monitor/webhooks.html", context)
 
@@ -442,7 +452,7 @@ def api_config_save(request):
             "pg_secondary_host": cc.pg_secondary_host, "pg_secondary_port": cc.pg_secondary_port,
             "pg_secondary_name": cc.pg_secondary_name, "pg_secondary_user": cc.pg_secondary_user,
             "pg_secondary_password_masked": cc.mask_pg_secondary_password(),
-            "redis_url": cc.redis_url,
+            "redis_url_masked": mask_url(cc.redis_url),
             "redis_password_masked": cc.mask_redis_password(),
             "ai_enabled": cc.ai_enabled, "ai_base_url": cc.ai_base_url,
             "ai_model": cc.ai_model, "ai_api_key_masked": cc.mask_ai_key(),
@@ -481,7 +491,8 @@ def api_config_test(request):
             result.update(status="critical", detail=str(e))
     elif section == "ai":
         ai = _effective_ai_config()
-        if not ai.enabled or not ai.api_key or not ai.base_url:
+        api_key = decrypt_secret(ai.api_key)
+        if not ai.enabled or not api_key or not ai.base_url:
             result.update(status="warning", detail="AI belum diaktifkan/terisi lengkap")
         else:
             try:
@@ -520,7 +531,7 @@ def api_config_ai_autodiscover(request):
     cc = ConnectionConfig.get_active()
     ai = AIConfig.get_active()
     base_url = cc.ai_base_url or ai.base_url
-    api_key = cc.ai_api_key or ai.api_key
+    api_key = decrypt_secret(cc.ai_api_key or ai.api_key)
     if not base_url or not api_key:
         return JsonResponse(
             {"ok": False, "error": "Isi & simpan Base URL dan API Key AI dulu."},
@@ -784,6 +795,76 @@ def api_db_sizes(request):
     return JsonResponse(data)
 
 
+_PG_ACTIVITY_SQL = """
+SELECT pid,
+       usename,
+       COALESCE(application_name, '') AS application_name,
+       COALESCE(client_addr::text, 'local') AS client_addr,
+       COALESCE(state, 'unknown') AS state,
+       COALESCE(wait_event_type, '') AS wait_event_type,
+       COALESCE(wait_event, '') AS wait_event,
+       EXTRACT(EPOCH FROM (now() - COALESCE(query_start, backend_start)))::int AS duration_s,
+       EXTRACT(EPOCH FROM (now() - state_change))::int AS state_age_s,
+       left(regexp_replace(query, '\s+', ' ', 'g'), 200) AS query
+FROM pg_stat_activity
+WHERE datname = %s AND pid <> pg_backend_pid()
+ORDER BY COALESCE(query_start, backend_start) DESC
+"""
+
+
+def _pg_activity_for(cfg) -> dict:
+    """Live pg_stat_activity snapshot for one PostgreSQL instance."""
+    out = {
+        "host": cfg.get("host"), "port": cfg.get("port"), "name": cfg.get("name"),
+        "connected": False, "sessions": [], "counts": {}, "error": None,
+    }
+    try:
+        conn = _pg_connect_for_slow(cfg)
+    except Exception as e:
+        out["error"] = f"connect failed: {e}"
+        return out
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute(_PG_ACTIVITY_SQL, (cfg["name"],))
+            cols = [d[0] for d in cur.description]
+            for row in cur.fetchall():
+                item = dict(zip(cols, row))
+                item["query"] = (item.get("query") or "").strip()
+                out["sessions"].append(item)
+            cur.execute("SELECT pg_database_size(%s)", (cfg["name"],))
+            out["bytes"] = cur.fetchone()[0]
+        out["connected"] = True
+        out["counts"] = {
+            "total": len(out["sessions"]),
+            "active": sum(1 for s in out["sessions"] if s["state"] == "active"),
+            "idle": sum(1 for s in out["sessions"] if s["state"] == "idle"),
+            "idle_in_transaction": sum(
+                1 for s in out["sessions"] if s["state"] == "idle in transaction"),
+            "waiting": sum(1 for s in out["sessions"] if s["state"] == "active"
+                           and s.get("wait_event_type")),
+        }
+    except Exception as e:
+        out["error"] = f"query failed: {e}"
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    return out
+
+
+@login_required
+def api_pg_activity(request):
+    """Realtime pg_stat_activity snapshot for the primary and secondary PostgreSQL."""
+    primary_cfg, secondary_cfg = _get_both_postgres_configs()
+    return JsonResponse({
+        "primary": _pg_activity_for(primary_cfg),
+        "secondary": _pg_activity_for(secondary_cfg),
+        "server_time": timezone.now().isoformat(),
+    })
+
+
 @login_required
 @require_POST
 def api_db_vacuum(request):
@@ -1018,47 +1099,15 @@ def api_db_sqlite_vacuum(request):
 @require_POST
 def api_db_redis_flush(request):
     """Jalankan FLUSHDB pada Redis (db terpilih) untuk membersihkan cache."""
-    import socket
-    import time
-
     cfg = _apotek_apps_config()
     url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
     info = _parse_redis_url(url)
 
-    def encode(*args):
-        out = f"*{len(args)}\r\n".encode()
-        for a in args:
-            a = str(a).encode()
-            out += b"$%d\r\n%s\r\n" % (len(a), a)
-        return out
-
     try:
-        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
-            if info["ssl"]:
-                import ssl as _ssl
-                sock = _ssl.create_default_context().wrap_socket(
-                    sock, server_hostname=info["host"]
-                )
-            sock.settimeout(2)
-            payload = b""
-            if info["password"]:
-                payload += encode("AUTH", info["password"])
-            payload += encode("SELECT", str(info["db"]))
-            payload += encode("FLUSHDB")
-            sock.sendall(payload)
-            raw = b""
-            deadline = time.time() + 2
-            while time.time() < deadline:
-                chunk = sock.recv(8192)
-                if not chunk:
-                    break
-                raw += chunk
-                if b"+OK" in raw or b"-" in raw:
-                    break
-        text = raw.decode(errors="replace")
-        if "+OK" in text:
+        replies, _ = _redis_execute(info, [("FLUSHDB",)], timeout=5)
+        if replies and replies[0] == "OK":
             return JsonResponse({"ok": True, "detail": f"Redis FLUSHDB selesai · db{info['db']}"})
-        return JsonResponse({"ok": False, "error": "respon tidak OK: " + text[:80]}, status=500)
+        return JsonResponse({"ok": False, "error": "respon tidak OK"}, status=500)
     except Exception as e:
         return JsonResponse({"ok": False, "error": f"Redis FLUSHDB gagal: {e}"}, status=500)
 
@@ -1093,14 +1142,14 @@ def _effective_ai_config():
     if cc.ai_model:
         ai.model = cc.ai_model
     if cc.ai_api_key:
-        ai.api_key = cc.ai_api_key
+        ai.api_key = decrypt_secret(cc.ai_api_key)
     if cc.ai_enabled:
         # hanya nyalakan bila user mengaktifkan di ConnectionConfig
         ai.enabled = True
     # bila ConnectionConfig pernah diisi, jangan biarkan AI mati bila
     # field enabled di ConnectionConfig false tapi ada url+key.
     if cc.ai_base_url and cc.ai_api_key and not ai.enabled:
-        ai.enabled = cc.ai_enabled
+        ai.enabled = bool(cc.ai_enabled)
     return ai
 
 
@@ -1201,9 +1250,13 @@ def _apotek_apps_config():
         if cc.pg_user:
             overrides["DB_USER"] = cc.pg_user
         if cc.pg_password:
-            overrides["DB_PASSWORD"] = cc.pg_password
+            pw = _safe_decrypt(cc.pg_password)
+            if pw:
+                overrides["DB_PASSWORD"] = pw
         if cc.redis_url:
-            overrides["REDIS_URL"] = cc.redis_url
+            redis_url = _safe_decrypt(cc.redis_url)
+            if redis_url:
+                overrides["REDIS_URL"] = redis_url
 
     def getter(key, default=None):
         if key in overrides:
@@ -1288,8 +1341,10 @@ def _get_both_postgres_configs():
             primary['user'] = cc.pg_user
             secondary['user'] = cc.pg_user
         if cc.pg_password:
-            primary['password'] = cc.pg_password
-            secondary['password'] = cc.pg_password
+            primary_password = _safe_decrypt(cc.pg_password)
+            if primary_password:
+                primary['password'] = primary_password
+                secondary['password'] = primary_password
         if cc.pg_secondary_host:
             secondary['host'] = cc.pg_secondary_host
         if cc.pg_secondary_port:
@@ -1299,7 +1354,9 @@ def _get_both_postgres_configs():
         if cc.pg_secondary_user:
             secondary['user'] = cc.pg_secondary_user
         if cc.pg_secondary_password:
-            secondary['password'] = cc.pg_secondary_password
+            secondary_password = _safe_decrypt(cc.pg_secondary_password)
+            if secondary_password:
+                secondary['password'] = secondary_password
 
     # Fix: if primary and secondary have the same port (common when ApotekApps/.env
     # has DB_PORT=5006 in both sections), probe for the actual standby port.
@@ -1423,72 +1480,198 @@ def _sqlite_size(path) -> int:
 
 
 @_ttl_cache()
-def _redis_size() -> dict:
-    """Return {'bytes': int|None, 'keys': int|None, 'status': ...} for Redis
-    via a raw RESP INFO+DBSIZE (no redis-py dependency required)."""
-    import socket
-    import time
-
+def _redis_snapshot() -> dict:
+    """Return one cached Redis health/size snapshot for all UI consumers."""
     cfg = _apotek_apps_config()
     url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
     info = _parse_redis_url(url)
-
-    def encode(*args):
-        out = f"*{len(args)}\r\n".encode()
-        for a in args:
-            a = str(a).encode()
-            out += b"$%d\r\n%s\r\n" % (len(a), a)
-        return out
+    meta = {"host": f"{info['host']}:{info['port']}", "db": info["db"]}
 
     try:
-        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
-            if info["ssl"]:
-                import ssl as _ssl
-                sock = _ssl.create_default_context().wrap_socket(
-                    sock, server_hostname=info["host"]
-                )
-            sock.settimeout(2)
+        replies, latency = _redis_execute(
+            info,
+            [("PING",), ("INFO", "server"), ("INFO", "memory"), ("DBSIZE",)],
+            timeout=5,
+        )
+        meta["latency_ms"] = latency
+        server_info = replies[1] if len(replies) > 1 else ""
+        memory_info = replies[2] if len(replies) > 2 else ""
+        used = None
+        if isinstance(memory_info, str):
+            for line in memory_info.splitlines():
+                if line.startswith("used_memory:"):
+                    try:
+                        used = int(line.split(":", 1)[1].strip())
+                    except ValueError:
+                        pass
+                    break
+        keys = replies[3] if len(replies) > 3 else None
+        if not replies or replies[0] != "PONG":
+            status = "critical"
+            detail = "no PONG response"
+        elif used is None:
+            status = "warning"
+            detail = "memory stats unavailable"
+        else:
+            status = "healthy"
+            detail = f"PONG {latency} ms"
+        if isinstance(server_info, str):
+            for line in server_info.splitlines():
+                if line.startswith("redis_version:"):
+                    meta["version"] = line.split(":", 1)[1].strip()
+                    break
+        return {
+            "status": status,
+            "detail": detail,
+            "meta": meta,
+            "bytes": used,
+            "keys": keys,
+        }
+    except Exception as e:
+        return {
+            "status": "critical",
+            "detail": f"unreachable: {e}. Start Redis: sh scripts/redis.sh start",
+            "meta": meta,
+            "bytes": None,
+            "keys": None,
+        }
+
+
+@_ttl_cache()
+def _redis_size() -> dict:
+    snapshot = _redis_snapshot()
+    host, _, port = snapshot["meta"]["host"].partition(":")
+    try:
+        port = int(port)
+    except ValueError:
+        port = None
+    return {
+        "bytes": snapshot["bytes"],
+        "keys": snapshot["keys"],
+        "status": snapshot["status"],
+        "human": _human_size(snapshot["bytes"]) if snapshot["bytes"] is not None else "n/a",
+        "host": host,
+        "port": port,
+        "db": snapshot["meta"].get("db", 0),
+        "detail": snapshot["detail"] if snapshot["status"] != "healthy"
+                   else f"{snapshot['meta']['host']} db{snapshot['meta'].get('db', 0)}",
+    }
+
+
+@_ttl_cache()
+def _probe_redis():
+    snapshot = _redis_snapshot()
+    return snapshot["status"], snapshot["detail"], snapshot["meta"]
+
+
+class _RedisReader:
+    def __init__(self, sock):
+        self.sock = sock
+        self.buffer = b""
+
+    def readline(self):
+        while True:
+            marker = self.buffer.find(b"\r\n")
+            if marker != -1:
+                line = self.buffer[:marker]
+                self.buffer = self.buffer[marker + 2:]
+                return line
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("Redis closed the connection")
+            self.buffer += chunk
+            if len(self.buffer) > 1024 * 1024:
+                raise ConnectionError("Redis response terlalu besar")
+
+    def read_exact(self, length):
+        while len(self.buffer) < length:
+            chunk = self.sock.recv(min(4096, length - len(self.buffer)))
+            if not chunk:
+                raise ConnectionError("Redis closed the connection")
+            self.buffer += chunk
+        data = self.buffer[:length]
+        self.buffer = self.buffer[length:]
+        if self.buffer.startswith(b"\r\n"):
+            self.buffer = self.buffer[2:]
+        return data
+
+
+def _redis_encode(*args):
+    out = f"*{len(args)}\r\n".encode()
+    for arg in args:
+        data = str(arg).encode("utf-8")
+        out += b"$%d\r\n%s\r\n" % (len(data), data)
+    return out
+
+
+def _redis_read_response(reader):
+    line = reader.readline()
+    prefix = line[:1]
+    payload = line[1:]
+    if prefix == b"+":
+        return payload.decode("utf-8", errors="replace")
+    if prefix == b"-":
+        raise ConnectionError(payload.decode("utf-8", errors="replace"))
+    if prefix == b":":
+        return int(payload)
+    if prefix == b"$":
+        length = int(payload)
+        if length == -1:
+            return None
+        return reader.read_exact(length).decode("utf-8", errors="replace")
+    if prefix == b"*":
+        return [
+            _redis_read_response(reader) for _ in range(int(payload))
+        ]
+    raise ConnectionError("Redis response tidak dikenal")
+
+
+def _redis_execute_protocol(info, commands, timeout, use_resp):
+    import socket
+    import time
+    import ssl as _ssl
+
+    started = time.time()
+    raw_sock = socket.create_connection((info["host"], info["port"]), timeout=timeout)
+    sock = raw_sock
+    if info["ssl"]:
+        sock = _ssl.create_default_context().wrap_socket(
+            raw_sock, server_hostname=info["host"]
+        )
+    try:
+        sock.settimeout(timeout)
+        if use_resp:
             payload = b""
             if info["password"]:
-                payload += encode("AUTH", info["password"])
-            payload += encode("INFO", "memory")
-            payload += encode("DBSIZE")
+                payload += _redis_encode("AUTH", info["password"])
+            payload += _redis_encode("SELECT", str(info["db"]))
+            for command in commands:
+                payload += _redis_encode(*command)
             sock.sendall(payload)
+        else:
+            if info["password"]:
+                auth = "AUTH " + info["password"].replace("\r", " ").replace("\n", " ")
+                sock.sendall((auth + "\r\n").encode("utf-8"))
+            sock.sendall(("SELECT " + str(info["db"]) + "\r\n").encode("utf-8"))
+            for command in commands:
+                args = [str(arg).replace("\r", " ").replace("\n", " ") for arg in command]
+                sock.sendall((" ".join(args) + "\r\n").encode("utf-8"))
+        reader = _RedisReader(sock)
+        setup_count = (1 if info["password"] else 0) + 1
+        replies = [_redis_read_response(reader) for _ in range(setup_count + len(commands))]
+        replies = replies[setup_count:]
+    finally:
+        sock.close()
+    return replies, round((time.time() - started) * 1000, 1)
 
-            raw = b""
-            deadline = time.time() + 2
-            while time.time() < deadline:
-                chunk = sock.recv(8192)
-                if not chunk:
-                    break
-                raw += chunk
-                if b"used_memory:" in raw and b":" in raw.split(b"used_memory:")[1][:40] and b"\r\n" in raw and b":" in raw.split(b"used_memory:")[1] and b"\r\n" in raw.split(b"used_memory:")[1]:
-                    if b"\r\n:0\r\n" in raw or b"\r\n:1\r\n" in raw or (raw.count(b"\r\n:") >= 2):
-                        break
 
-        text = raw.decode(errors="replace")
-        used = None
-        for line in text.splitlines():
-            if line.startswith("used_memory:"):
-                try:
-                    used = int(line.split(":", 1)[1].strip())
-                except ValueError:
-                    pass
-                break
-        keys = None
-        # DBSIZE response is the last integer reply "+:N\r\n"
-        replies = [int(p[1:]) for p in text.replace("\r\n", "\n").split("\n") if p.startswith(":")]
-        if replies:
-            keys = replies[-1]
-        status = "healthy" if used is not None else "warning"
-        return {"bytes": used, "keys": keys, "status": status,
-                "human": _human_size(used) if used is not None else "n/a",
-                "host": info["host"], "port": info["port"], "db": info["db"],
-                "detail": f"{info['host']}:{info['port']} db{info['db']}"}
-    except Exception as e:
-        return {"bytes": None, "keys": None, "status": "critical", "human": "n/a",
-                "host": info["host"], "port": info["port"], "db": info["db"],
-                "detail": f"unreachable: {e}. Start Redis: sh scripts/redis.sh start"}
+def _redis_execute(info, commands, timeout=5):
+    try:
+        return _redis_execute_protocol(info, commands, timeout, True)
+    except ConnectionError as exc:
+        if "Protocol error" not in str(exc):
+            raise
+        return _redis_execute_protocol(info, commands, timeout, False)
 
 
 def _parse_redis_url(url: str) -> dict:
@@ -1501,79 +1684,17 @@ def _parse_redis_url(url: str) -> dict:
             db = int(parsed.path.lstrip("/"))
         except ValueError:
             db = 0
+    host = parsed.hostname or "127.0.0.1"
+    if host.lower() == "localhost":
+        host = "127.0.0.1"
     return {
-        "host": parsed.hostname or "127.0.0.1",
+        "host": host,
         "port": parsed.port or 6379,
         "password": unquote(parsed.password) if parsed.password else "",
         "db": db,
         "ssl": parsed.scheme == "rediss",
     }
 
-
-@_ttl_cache()
-def _probe_redis():
-    """Probe Redis with a raw RESP PING (no redis-py dependency required).
-
-    Returns (status, detail, meta) where status is healthy|warning|critical.
-    """
-    import socket
-    import time
-
-    cfg = _apotek_apps_config()
-    url = cfg("REDIS_URL", "redis://127.0.0.1:6379/1")
-    info = _parse_redis_url(url)
-    meta = {"host": f"{info['host']}:{info['port']}", "db": info["db"]}
-
-    def encode(*args):
-        out = f"*{len(args)}\r\n".encode()
-        for a in args:
-            a = str(a).encode()
-            out += b"$%d\r\n%s\r\n" % (len(a), a)
-        return out
-
-    try:
-        started = time.time()
-        with socket.create_connection((info["host"], info["port"]), timeout=2) as sock:
-            if info["ssl"]:
-                import ssl as _ssl
-                sock = _ssl.create_default_context().wrap_socket(
-                    sock, server_hostname=info["host"]
-                )
-            sock.settimeout(2)
-            payload = b""
-            if info["password"]:
-                payload += encode("AUTH", info["password"])
-            payload += encode("PING")
-            payload += encode("INFO", "server")
-            sock.sendall(payload)
-
-            raw = b""
-            deadline = time.time() + 2
-            while b"+PONG" not in raw and b"-" not in raw[:1] and time.time() < deadline:
-                chunk = sock.recv(8192)
-                if not chunk:
-                    break
-                raw += chunk
-                if b"redis_version" in raw or b"-ERR" in raw or b"-NOAUTH" in raw:
-                    break
-
-        latency = round((time.time() - started) * 1000, 1)
-        meta["latency_ms"] = latency
-        text = raw.decode(errors="replace")
-
-        if "NOAUTH" in text or "WRONGPASS" in text or "invalid password" in text.lower():
-            # server is reachable but rejects the configured password → config issue, not down
-            return "warning", "auth failed (check REDIS_URL)", meta
-        if "+PONG" not in text:
-            return "critical", "no PONG response", meta
-
-        for line in text.splitlines():
-            if line.startswith("redis_version:"):
-                meta["version"] = line.split(":", 1)[1].strip()
-                break
-        return "healthy", f"PONG {latency} ms", meta
-    except Exception as e:
-        return "critical", f"unreachable: {e}. Start Redis: sh scripts/redis.sh start", meta
 
 
 @_ttl_cache()
@@ -2314,21 +2435,19 @@ def api_topology_json(request):
     edges.append({"from": "system", "to": "email", "requests_5m": 0, "status": system_status,
                   "label": "hosts"})
 
-    # Member card — loyalty monitoring (member count + total poin from PostgreSQL)
-    # Sama seperti node modul: "idle" bila tidak ada aktivitas terbaru, "warning"
-    # hanya bila pembacaan data gagal.
+    # Member API — external loyalty service (lives on a separate host)
     member_count = pg.get("members")
     member_points = pg.get("points")
     member_status = "idle" if member_count is not None else "warning"
     nodes.append({
-        "id": "member", "label": "Member", "kind": "service",
-        "tech": "Loyalty · Poin", "status": member_status,
+        "id": "member", "label": "Member API", "kind": "service",
+        "tech": "External API · Loyalty · Poin", "status": member_status,
         "members": member_count, "points": member_points,
         "detail": (f"Member: {member_count} · Poin: {member_points}"
-                   if member_count is not None else "data tidak tersedia"),
+                    if member_count is not None else "data tidak tersedia"),
     })
     edges.append({"from": "pg", "to": "member", "requests_5m": 0, "status": member_status,
-                  "label": "members"})
+                  "label": "members", "tech": "external API"})
 
     # overall health — 4xx is "reachable" (endpoint responded), not an outage.
     total_all = APIRequestLog.objects.filter(created_at__gte=since).count()
@@ -2560,7 +2679,7 @@ def api_ai_config(request):
         if cc.ai_enabled:
             cfg.enabled = True
         elif cc.ai_base_url and cc.ai_api_key:
-            cfg.enabled = True
+            cfg.enabled = bool(cc.ai_enabled)
     return JsonResponse({"config": _ai_config_public(cfg)})
 
 

@@ -1,110 +1,199 @@
 {% extends "base.html" %}
-{% block title %}Webhooks — ApotekMonitor{% endblock %}
-{% block page_title %}Webhook Events{% endblock %}
+
+{% block title %}Realtime Activity — ApotekMonitor{% endblock %}
 
 {% block content %}
-<div class="card" style="margin-bottom:1rem">
-  <div class="card__body">
-    <p style="color:var(--color-muted);font-size:.85rem">
-      Endpoint penerima webhook: <code>POST /webhook/receive/</code>
-      &nbsp;·&nbsp; Kirim JSON dengan field <code>event</code> untuk mencatat event.
-    </p>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card__header">
-    <h2 class="card__title"><i class="fa-solid fa-bell" style="color:var(--neon-yellow)"></i> 100 Event Terbaru</h2>
-    <div class="card__actions">
-      <form method="get" id="whFilterForm" style="display:flex;gap:6px;align-items:center">
-        <select name="status" class="select-sm" onchange="this.form.submit()">
-          <option value="">Semua Status</option>
-          <option value="received"  {% if status_filter == "received"  %}selected{% endif %}>Received</option>
-          <option value="processed" {% if status_filter == "processed" %}selected{% endif %}>Processed</option>
-          <option value="failed"    {% if status_filter == "failed"    %}selected{% endif %}>Failed</option>
-        </select>
-      </form>
+<section class="page">
+  <div class="page__head">
+    <div>
+      <h1 class="page__title"><i class="fa-solid fa-wave-square"></i> Realtime Activity</h1>
+      <p class="page__sub">Sesi dan query yang sedang berjalan pada kedua instance PostgreSQL,via <code>pg_stat_activity</code>.</p>
+    </div>
+    <div class="page__actions">
+      <label class="checkbox"><input type="checkbox" id="autoRefresh" checked> Auto-refresh</label>
+      <select class="select-sm" id="intervalSel" style="width:auto">
+        <option value="3">3s</option>
+        <option value="5" selected>5s</option>
+        <option value="10">10s</option>
+        <option value="30">30s</option>
+      </select>
+      <button type="button" class="btn btn-outline btn-sm" id="refreshBtn"><i class="fa-solid fa-rotate"></i> Refresh</button>
+      <span id="updated" style="opacity:.6;font-size:.78rem"></span>
     </div>
   </div>
-  <div class="card__body" style="padding:0">
-    <div class="table-wrapper">
-      <table class="table table--compact">
-        <thead>
-          <tr>
-            <th>Waktu</th>
-            <th>Event Type</th>
-            <th>Source IP</th>
-            <th>Status</th>
-            <th>Payload (preview)</th>
-            <th>Error</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for ev in events %}
-          <tr class="wh-row">
-            <td class="text-muted text-sm" style="white-space:nowrap">{{ ev.received_at|date:"d/m H:i:s" }}</td>
-            <td><span class="badge badge--info">{{ ev.event_type }}</span></td>
-            <td class="text-mono text-sm">{{ ev.source_ip|default:"—" }}</td>
-            <td>
-              <span class="status-dot status-dot--{{ ev.status }}"></span>{{ ev.status }}
-            </td>
-            <td class="text-mono text-sm" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ ev.payload }}">
-              {{ ev.payload|truncatechars:80 }}
-            </td>
-            <td class="text-danger text-sm">{{ ev.error_message|truncatechars:50 }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Belum ada webhook event diterima.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+
+  <div class="pg-grid">
+    <div class="card" data-side="primary">
+      <div class="card__header">
+        <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-cyan)"></i> Primary</h2>
+        <div class="card__header-right">
+          <span class="status-badge" data-role="badge">—</span>
+        </div>
+      </div>
+      <div class="card__body" style="padding:0">
+        <p class="pg-meta" data-role="meta">{{ pg_primary.host }}:{{ pg_primary.port }} · {{ pg_primary.name }}</p>
+        <div class="pg-kpis" data-role="kpis"></div>
+        <div class="table-wrapper">
+          <table class="table table--compact">
+            <thead>
+              <tr><th>PID</th><th>User</th><th>Client</th><th>State</th><th>Durasi</th><th>Query</th></tr>
+            </thead>
+            <tbody data-role="body"><tr><td colspan="6" class="pg-empty">Memuat…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
-    <div class="pagination-bar" id="whPager">
-      <span class="page-info" id="whInfo"></span>
-      <div class="page-actions">
-        <span class="page-size-label">Rows:</span>
-        <select id="whPageSize" class="select-sm">
-          <option value="5">5</option>
-          <option value="10" selected>10</option>
-          <option value="15">15</option>
-          <option value="25">25</option>
-          <option value="50">50</option>
-          <option value="100">100</option>
-        </select>
-        <button class="btn btn-outline btn-sm" id="whPrev">‹ Prev</button>
-        <button class="btn btn-outline btn-sm" id="whNext">Next ›</button>
+    <div class="card" data-side="secondary">
+      <div class="card__header">
+        <h2 class="card__title"><i class="fa-solid fa-database" style="color:var(--neon-magenta)"></i> Secondary</h2>
+        <div class="card__header-right">
+          <span class="status-badge" data-role="badge">—</span>
+        </div>
+      </div>
+      <div class="card__body" style="padding:0">
+        <p class="pg-meta" data-role="meta">{{ pg_secondary.host }}:{{ pg_secondary.port }} · {{ pg_secondary.name }}</p>
+        <div class="pg-kpis" data-role="kpis"></div>
+        <div class="table-wrapper">
+          <table class="table table--compact">
+            <thead>
+              <tr><th>PID</th><th>User</th><th>Client</th><th>State</th><th>Durasi</th><th>Query</th></tr>
+            </thead>
+            <tbody data-role="body"><tr><td colspan="6" class="pg-empty">Memuat…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
-</div>
+</section>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let _whPage = 1, _whPageSize = 10;
-const rows = () => [...document.querySelectorAll(".wh-row")];
+const ACTIVITY_URL = '{% url "api_pg_activity" %}';
 
-function renderWh() {
-  const all   = rows();
-  const total = all.length;
-  if (total === 0) { document.getElementById("whPager").style.display = "none"; return; }
-  const pages = Math.ceil(total / _whPageSize);
-  _whPage = Math.max(1, Math.min(_whPage, pages));
-  const start = (_whPage - 1) * _whPageSize;
+const STATE_DOT = {
+  active: 'status-dot--processed',
+  idle: 'status-dot--received',
+  'idle in transaction': 'status-dot--failed',
+  'idle in transaction (aborted)': 'status-dot--failed',
+};
 
-  all.forEach((r, i) => r.style.display = (i >= start && i < start + _whPageSize) ? "" : "none");
-
-  document.getElementById("whInfo").textContent =
-    `${start+1}–${Math.min(start+_whPageSize, total)} dari ${total}`;
-  document.getElementById("whPrev").disabled = _whPage <= 1;
-  document.getElementById("whNext").disabled = _whPage >= pages;
+function fmtDuration(s) {
+  if (s === null || s === undefined) return '—';
+  s = Number(s);
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
 }
 
-document.getElementById("whPrev").addEventListener("click",     () => { _whPage--; renderWh(); });
-document.getElementById("whNext").addEventListener("click",     () => { _whPage++; renderWh(); });
-document.getElementById("whPageSize").addEventListener("change", e => { _whPageSize = +e.target.value; _whPage = 1; renderWh(); });
+function esc(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
-renderWh();
+function renderCard(card, d) {
+  const badge = card.querySelector('[data-role="badge"]');
+  const meta = card.querySelector('[data-role="meta"]');
+  const kpis = card.querySelector('[data-role="kpis"]');
+  const body = card.querySelector('[data-role="body"]');
+
+  if (d && d.host) {
+    meta.textContent = d.host + ':' + d.port + ' · ' + d.name;
+  }
+
+  if (!d || !d.connected) {
+    badge.className = 'status-badge status-badge--err';
+    badge.textContent = 'OFFLINE';
+    body.innerHTML = '<tr><td colspan="6" class="pg-empty pg-empty--err">'
+      + esc(d && d.error ? d.error : 'tidak terhubung') + '</td></tr>';
+    return;
+  }
+
+  const c = d.counts || {};
+  badge.className = 'status-badge status-badge--ok';
+  badge.textContent = 'ONLINE';
+  kpis.innerHTML = [
+    ['Total', c.total], ['Active', c.active], ['Idle', c.idle],
+    ['Trx', c.idle_in_transaction], ['Wait', c.waiting],
+  ].map(([k, v]) => '<div class="pg-kpi"><span class="pg-kpi__v">' + (v || 0)
+    + '</span><span class="pg-kpi__k">' + k + '</span></div>').join('');
+
+  if (!d.sessions.length) {
+    body.innerHTML = '<tr><td colspan="6" class="pg-empty">Tidak ada sesi aktif.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = d.sessions.map(s => {
+    const dot = STATE_DOT[s.state] || 'status-dot--fail';
+    const state = s.state
+      + (s.wait_event_type ? ' <span class="text-muted">(' + esc(s.wait_event_type) + ':' + esc(s.wait_event) + ')</span>' : '');
+    return '<tr>'
+      + '<td class="text-mono text-sm">' + esc(s.pid) + '</td>'
+      + '<td class="text-sm">' + esc(s.usename) + '</td>'
+      + '<td class="text-mono text-sm">' + esc(s.client_addr) + '</td>'
+      + '<td class="text-sm"><span class="status-dot ' + dot + '"></span>' + state + '</td>'
+      + '<td class="text-mono text-sm">' + fmtDuration(s.duration_s) + '</td>'
+      + '<td class="text-mono text-sm" title="' + esc(s.query) + '">'
+      + (esc(s.query) || '<span class="text-muted">—</span>') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+let timer = null, inFlight = false;
+
+async function refresh() {
+  if (inFlight) return;
+  inFlight = true;
+  const refreshBtn = document.getElementById('refreshBtn');
+  if (refreshBtn) refreshBtn.disabled = true;
+  try {
+    const res = await fetch(ACTIVITY_URL, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    document.querySelectorAll('.pg-grid .card').forEach(card => {
+      renderCard(card, data[card.dataset.side]);
+    });
+    document.getElementById('updated').textContent =
+      'Diperbarui ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    document.querySelectorAll('.pg-grid .card').forEach(card => {
+      renderCard(card, { connected: false, error: e.message });
+    });
+  } finally {
+    inFlight = false;
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+}
+
+function schedule() {
+  if (timer) clearInterval(timer);
+  if (document.getElementById('autoRefresh').checked) {
+    timer = setInterval(refresh, Number(document.getElementById('intervalSel').value) * 1000);
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', refresh);
+document.getElementById('autoRefresh').addEventListener('change', schedule);
+document.getElementById('intervalSel').addEventListener('change', schedule);
+
+refresh();
+schedule();
 </script>
+
+<style>
+.pg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; }
+.pg-meta { padding: 8px 14px 0; margin: 0; font-size: .74rem; color: var(--text-muted); font-family: var(--font-mono); }
+.pg-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding: 10px 14px; }
+.pg-kpi { background: var(--bg-input, var(--bg-card)); border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); padding: 6px 8px; text-align: center; }
+.pg-kpi__v { display: block; font-size: 1rem; font-weight: 700; color: var(--neon-cyan); }
+.pg-kpi__k { display: block; font-size: .64rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.pg-empty { text-align: center; color: var(--text-muted); padding: 1.5rem; font-size: .78rem; }
+.pg-empty--err { color: var(--neon-red, #ff5b6e); }
+.pg-grid .table-wrapper { max-height: 520px; overflow-y: auto; }
+.pg-grid .table--compact td:last-child {
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+@media (max-width: 1100px) { .pg-grid { grid-template-columns: 1fr; } }
+</style>
 {% endblock %}
