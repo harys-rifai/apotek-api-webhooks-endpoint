@@ -35,6 +35,49 @@
   @media (max-width: 768px) {
     .dash .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   }
+  /* Request flow animation */
+  .apm-flow-step {
+    position: relative;
+    overflow: visible;
+  }
+  .edge-line-flow {
+    stroke: var(--neon-cyan);
+    stroke-width: 2;
+    stroke-dasharray: 8 4;
+    animation: flowDash 1.5s linear infinite;
+    opacity: 0;
+    fill: none;
+  }
+  .edge-line-flow.ok {
+    stroke: #36ff9e; /* green */
+    animation-name: flowGreen;
+  }
+  .edge-line-flow.warning {
+    stroke: #ffd23f; /* yellow */
+    animation-name: flowYellow;
+  }
+  .edge-line-flow.critical {
+    stroke: #ff4d6d; /* red */
+    animation-name: flowRed;
+  }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -24; }
+  }
+  @keyframes flowGreen {
+    from { opacity: 0; stroke: #36ff9e; }
+    20% { opacity: 1; }
+    to { opacity: 0; stroke: #36ff9e; }
+  }
+  @keyframes flowYellow {
+    from { opacity: 0; stroke: #ffd23f; }
+    20% { opacity: 1; }
+    to { opacity: 0; stroke: #ffd23f; }
+  }
+  @keyframes flowRed {
+    from { opacity: 0; stroke: #ff4d6d; }
+    20% { opacity: 1; }
+    to { opacity: 0; stroke: #ff4d6d; }
+  }
 </style>
 {% endblock %}
 
@@ -101,7 +144,7 @@
             <div class="apm-flow-step__status" id="apm-firewall">OK</div>
           </div>
         </div>
-        <span class="apm-flow-arrow"><i class="fa-solid fa-angle-right"></i></span>
+        <svg class="apm-flow-arrow" width="20" height="24" viewBox="0 0 20 24"><line class="edge-line-flow" id="flow-firewall-apps" x1="10" y1="12" x2="10" y2="12" stroke-width="2" stroke-linecap="round"/></svg>
         <div class="apm-flow-step">
           <span class="apm-flow-step__icon"><i class="fa-solid fa-server"></i></span>
           <div class="apm-flow-step__info">
@@ -109,7 +152,7 @@
             <div class="apm-flow-step__status" id="apm-apps">OK</div>
           </div>
         </div>
-        <span class="apm-flow-arrow"><i class="fa-solid fa-angle-right"></i></span>
+        <svg class="apm-flow-arrow" width="20" height="24" viewBox="0 0 20 24"><line class="edge-line-flow" id="flow-apps-gateway" x1="10" y1="12" x2="10" y2="12" stroke-width="2" stroke-linecap="round"/></svg>
         <div class="apm-flow-step">
           <span class="apm-flow-step__icon"><i class="fa-solid fa-route"></i></span>
           <div class="apm-flow-step__info">
@@ -117,7 +160,7 @@
             <div class="apm-flow-step__status" id="apm-gateway">OK</div>
           </div>
         </div>
-        <span class="apm-flow-arrow"><i class="fa-solid fa-angle-right"></i></span>
+        <svg class="apm-flow-arrow" width="20" height="24" viewBox="0 0 20 24"><line class="edge-line-flow" id="flow-gateway-db" x1="10" y1="12" x2="10" y2="12" stroke-width="2" stroke-linecap="round"/></svg>
         <div class="apm-flow-step">
           <span class="apm-flow-step__icon"><i class="fa-solid fa-database"></i></span>
           <div class="apm-flow-step__info">
@@ -125,7 +168,7 @@
             <div class="apm-flow-step__status" id="apm-db">OK</div>
           </div>
         </div>
-        <span class="apm-flow-arrow"><i class="fa-solid fa-angle-right"></i></span>
+        <svg class="apm-flow-arrow" width="20" height="24" viewBox="0 0 20 24"><line class="edge-line-flow" id="flow-db-success" x1="10" y1="12" x2="10" y2="12" stroke-width="2" stroke-linecap="round"/></svg>
         <div class="apm-flow-step apm-flow-step--success">
           <span class="apm-flow-step__icon"><i class="fa-solid fa-circle-check"></i></span>
           <div class="apm-flow-step__info">
@@ -149,25 +192,8 @@
     .apm-flow-step__status{font-size:.72rem;color:var(--text-muted);margin-top:2px}
     .apm-flow-arrow{color:var(--neon-cyan);opacity:.7;display:flex;align-items:center}
     @media(max-width:1100px){.apm-flow{flex-wrap:wrap}}
-  </style>
-
-<!-- Metric Timeline (APM-style) -->
-  <div class="card" style="margin-bottom:14px">
-    <div class="card__header">
-      <h2 class="card__title"><i class="fa-solid fa-chart-line" style="color:var(--neon-cyan)"></i> Metrics</h2>
-      <div class="card__actions">
-        <select id="chartDaysSelect" class="select-sm">
-          <option value="7">7 Hari</option>
-          <option value="14">14 Hari</option>
-          <option value="30">30 Hari</option>
-        </select>
-      </div>
-    </div>
-    <div class="card__body" style="padding:14px 16px">
-      <canvas id="metricsChart" style="max-height:280px"></canvas>
-    </div>
-  </div>
-
+</style>
+    
   <!-- Bottom Row tables -->
   <div class="bottom-row">
     <!-- Top Endpoints -->
@@ -202,24 +228,73 @@
             </select>
             <button class="btn btn-outline btn-sm" id="topEpPrev">‹ Prev</button>
             <button class="btn btn-outline btn-sm" id="topEpNext">Next ›</button>
-  </div>
-
-<!-- Metric Timeline (APM-style) -->
-  <div class="card" style="margin-bottom:14px">
-    <div class="card__header">
-      <h2 class="card__title"><i class="fa-solid fa-chart-line" style="color:var(--neon-cyan)"></i> Metrics</h2>
-      <div class="card__actions">
-        <select id="chartDaysSelect" class="select-sm">
-          <option value="7">7 Hari</option>
-          <option value="14">14 Hari</option>
-          <option value="30">30 Hari</option>
-        </select>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="card__body" style="padding:14px 16px">
-      <canvas id="metricsChart" style="max-height:280px"></canvas>
+
+    <!-- Metric Timeline (APM-style) -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card__header">
+        <h2 class="card__title"><i class="fa-solid fa-chart-line" style="color:var(--neon-cyan)"></i> Metrics</h2>
+        <div class="card__actions">
+          <select id="chartDaysSelect" class="select-sm">
+            <option value="7">7 Hari</option>
+            <option value="14">14 Hari</option>
+            <option value="30">30 Hari</option>
+          </select>
+        </div>
+      </div>
+      <div class="card__body" style="padding:14px 16px">
+        <canvas id="metricsChart" style="max-height:280px"></canvas>
+      </div>
     </div>
   </div>
+
+  <style>
+    /* Request flow animation similar to topology */
+    .apm-flow-step {
+      position: relative;
+      overflow: visible;
+    }
+    .edge-line-flow {
+      stroke: var(--neon-cyan);
+      stroke-width: 2;
+      stroke-dasharray: 8 4;
+      animation: flowDash 1.5s linear infinite;
+      opacity: 0;
+    }
+    .edge-line-flow.ok {
+      stroke: #36ff9e; /* green */
+      animation-name: flowGreen;
+    }
+    .edge-line-flow.warning {
+      stroke: #ffd23f; /* yellow */
+      animation-name: flowYellow;
+    }
+    .edge-line-flow.critical {
+      stroke: #ff4d6d; /* red */
+      animation-name: flowRed;
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -24; }
+    }
+    @keyframes flowGreen {
+      from { opacity: 0; stroke: #36ff9e; }
+      20% { opacity: 1; }
+      to { opacity: 0; stroke: #36ff9e; }
+    }
+    @keyframes flowYellow {
+      from { opacity: 0; stroke: #ffd23f; }
+      20% { opacity: 1; }
+      to { opacity: 0; stroke: #ffd23f; }
+    }
+    @keyframes flowRed {
+      from { opacity: 0; stroke: #ff4d6d; }
+      20% { opacity: 1; }
+      to { opacity: 0; stroke: #ff4d6d; }
+    }
+  </style>
 
   <!-- Bottom Row tables -->
   <div class="bottom-row">
