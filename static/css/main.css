@@ -159,7 +159,7 @@
 /* ── Navbar (minimal top bar, no menu — nav lives in bottom dock) ── */
 .navbar {
   height: var(--topbar-height);
-  background: var(--bg-topbar);
+  background: rgba(0, 0, 0, 0.05);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -170,6 +170,7 @@
   position: sticky;
   top: 0;
   z-index: 50;
+  margin-bottom: 0;
 }
 
 .navbar__brand {
@@ -497,7 +498,23 @@
   color: var(--text-primary); font-size: 1.05rem; padding: 6px 8px; border-radius: 8px;
   transition: background .15s, color .15s;
 }
-.navbar__bell:hover { background: rgba(255,255,255,.06); color: var(--neon-cyan); }
+
+.navbar__bell:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--neon-cyan);
+}
+
+.navbar__bell.has-unread {
+  animation: bellShake .7s ease-in-out 2;
+}
+
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(14deg); }
+  40% { transform: rotate(-12deg); }
+  60% { transform: rotate(8deg); }
+  80% { transform: rotate(-5deg); }
+}
 .navbar__badge {
   position: absolute; top: 0; right: 0; min-width: 17px; height: 17px; padding: 0 4px;
   background: var(--neon-red, #ff3366); color: #fff; border-radius: 999px;

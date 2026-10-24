@@ -280,10 +280,11 @@ a:hover {
 /* --- PAGE CONTENT --- */
 .page-content {
     flex: 1;
-    padding: 24px;
+    padding: 12px 16px 140px 16px;
     width: 100%;
-    max-width: 1920px;
+    max-width: 1600px;
     margin: 0 auto;
+    box-sizing: border-box;
 }
 
 /* ==========================================

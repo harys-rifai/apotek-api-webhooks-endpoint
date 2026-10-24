@@ -25,11 +25,12 @@
 
   {% include "partials/sidebar.html" %}
 
-  <!-- Gunakan struktur yang sama persis dengan ApotekApps -->
-  <div class="main-content">
-    {% include "partials/navbar.html" %}
+  {% include "partials/navbar.html" %}
 
-    <div class="page-content">
+  <!-- Gunakan struktur yang sama persis dengan ApotekApps -->
+  <div class="main-content" style="padding-top:0;margin-top:0">
+
+    <div class="page-content" style="padding-top:8px">
       {% block content %}{% endblock %}
     </div>
   </div>

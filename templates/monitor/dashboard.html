@@ -4,26 +4,30 @@
 
 {% block extra_head %}
 <style>
-  .dash .kpi-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
-  .dash .kpi-card { padding: 12px 14px; gap: 10px; }
-  .dash .kpi-card__icon { width: 34px; height: 34px; font-size: 1rem; border-radius: 10px; }
-  .dash .kpi-card__label { font-size: .66rem; letter-spacing: .4px; }
-  .dash .kpi-card__value { font-size: 1.15rem; }
-  .dash .chart-row { grid-template-columns: 1.15fr 1fr; gap: 10px; margin-bottom: 10px; }
-  .dash .bottom-row { grid-template-columns: 1.1fr 1fr; gap: 10px; margin-bottom: 10px; }
-  .dash .card { border-radius: 10px; }
-  .dash .card__header { padding: 10px 12px; }
-  .dash .card__title { font-size: .82rem; }
-  .dash .card__body { padding: 10px 12px; }
+  .dash { max-width: 1400px; margin: 0 auto; }
+  .dash .kpi-grid { grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 16px; }
+  .dash .kpi-card { padding: 14px 16px; gap: 12px; border-radius: 12px; }
+  .dash .kpi-card__icon { width: 38px; height: 38px; font-size: 1.05rem; border-radius: 12px; }
+  .dash .kpi-card__label { font-size: .68rem; letter-spacing: .5px; text-transform: uppercase; }
+  .dash .kpi-card__value { font-size: 1.35rem; font-weight: 700; }
+  .dash .chart-row { grid-template-columns: 1.6fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .dash .bottom-row { grid-template-columns: 1.2fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .dash .card { border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.25); }
+  .dash .card__header { padding: 12px 16px; }
+  .dash .card__title { font-size: .88rem; font-weight: 600; }
+  .dash .card__body { padding: 12px 16px; }
   .dash .table--compact thead th,
-  .dash .table--compact tbody td { padding: 6px 10px; font-size: .78rem; }
-  .dash .card__link { font-size: .72rem; }
-  .dash .select-sm { font-size: .72rem; padding: 4px 8px; }
-  .dash .btn-outline { font-size: .72rem; padding: 4px 10px; }
-  @media (max-width: 980px) {
-    .dash .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .dash .table--compact tbody td { padding: 8px 12px; font-size: .8rem; }
+  .dash .card__link { font-size: .75rem; }
+  .dash .select-sm { font-size: .75rem; padding: 5px 10px; }
+  .dash .btn-outline { font-size: .75rem; padding: 5px 12px; }
+  @media (max-width: 1200px) {
+    .dash .kpi-grid { grid-template-columns: repeat(3, 1fr); }
     .dash .chart-row { grid-template-columns: 1fr; }
     .dash .bottom-row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 768px) {
+    .dash .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   }
 </style>
 {% endblock %}
@@ -80,37 +84,37 @@
   <div class="chart-row">
     <div class="card">
       <div class="card__header">
-        <h2 class="card__title"><i class="fa-solid fa-chart-bar" style="color:var(--neon-cyan)"></i> Request Volume</h2>
+        <h2 class="card__title"><i class="fa-solid fa-chart-line" style="color:var(--neon-cyan)"></i> Request Volume Trend</h2>
         <div class="card__actions">
           <select id="chartDaysSelect" class="select-sm">
-            <option value="7">7 hari</option>
-            <option value="14">14 hari</option>
-            <option value="30">30 hari</option>
+            <option value="7">7 Hari</option>
+            <option value="14">14 Hari</option>
+            <option value="30">30 Hari</option>
           </select>
         </div>
       </div>
-      <div class="card__body" style="padding:10px 12px">
-        <canvas id="volumeChart" style="max-height:150px"></canvas>
+      <div class="card__body" style="padding:14px 16px">
+        <canvas id="volumeChart" style="max-height:220px"></canvas>
       </div>
     </div>
 
     <div class="card">
       <div class="card__header">
-        <h2 class="card__title"><i class="fa-solid fa-chart-pie" style="color:var(--neon-magenta)"></i> Status</h2>
+        <h2 class="card__title"><i class="fa-solid fa-chart-pie" style="color:var(--neon-magenta)"></i> Status Distribution</h2>
       </div>
-      <div class="card__body" style="padding:10px 12px;display:flex;justify-content:center;align-items:center">
-        <canvas id="statusChart" style="max-height:150px;max-width:150px"></canvas>
+      <div class="card__body" style="padding:14px 16px;display:flex;justify-content:center;align-items:center">
+        <canvas id="statusChart" style="max-height:220px;max-width:220px"></canvas>
       </div>
     </div>
   </div>
 
   <!-- Latency Chart -->
-  <div class="card" style="margin-bottom:12px">
+  <div class="card" style="margin-bottom:14px">
     <div class="card__header">
-      <h2 class="card__title"><i class="fa-solid fa-wave-square" style="color:var(--neon-purple)"></i> Avg Latency (ms)</h2>
+      <h2 class="card__title"><i class="fa-solid fa-gauge-high" style="color:var(--neon-purple)"></i> Average Response Time</h2>
     </div>
-    <div class="card__body" style="padding:10px 12px">
-      <canvas id="latencyChart" style="max-height:90px"></canvas>
+    <div class="card__body" style="padding:14px 16px">
+      <canvas id="latencyChart" style="max-height:110px"></canvas>
     </div>
   </div>
 

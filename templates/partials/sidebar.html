@@ -3,14 +3,11 @@
   <a href="{% url 'dashboard' %}" class="dock__item {% if active_menu == 'dashboard' %}active{% endif %}" data-tip="Dashboard">
     <span class="dock__tile"><i class="fa-solid fa-chart-line"></i></span>
   </a>
-  <a href="{% url 'endpoint_list' %}" class="dock__item {% if active_menu == 'endpoints' %}active{% endif %}" data-tip="Endpoints">
-    <span class="dock__tile"><i class="fa-solid fa-plug"></i></span>
-  </a>
-  <a href="{% url 'log_list' %}" class="dock__item {% if active_menu == 'logs' %}active{% endif %}" data-tip="Request Logs">
-    <span class="dock__tile"><i class="fa-solid fa-list"></i></span>
+  <a href="{% url 'endpoint_list' %}" class="dock__item {% if active_menu == 'endpoints' or active_menu == 'logs' or active_menu == 'alerts' %}active{% endif %}" data-tip="Monitoring">
+    <span class="dock__tile"><i class="fa-solid fa-chart-bar"></i></span>
   </a>
   <a href="{% url 'webhook_list' %}" class="dock__item {% if active_menu == 'webhooks' %}active{% endif %}" data-tip="Webhooks">
-    <span class="dock__tile"><i class="fa-solid fa-bell"></i></span>
+    <span class="dock__tile"><i class="fa-solid fa-satellite-dish"></i></span>
   </a>
   <a href="{% url 'topology' %}" class="dock__item {% if active_menu == 'topology' %}active{% endif %}" data-tip="Topology">
     <span class="dock__tile"><i class="fa-solid fa-network-wired"></i></span>
@@ -20,9 +17,6 @@
   </a>
   <a href="{% url 'db_maintenance' %}" class="dock__item {% if active_menu == 'db_maintenance' %}active{% endif %}" data-tip="Maintenance">
     <span class="dock__tile"><i class="fa-solid fa-screwdriver-wrench"></i></span>
-  </a>
-  <a href="{% url 'alerts_page' %}" class="dock__item {% if active_menu == 'alerts' %}active{% endif %}" data-tip="Notifikasi">
-    <span class="dock__tile"><i class="fa-solid fa-bell"></i></span>
   </a>
   <span class="dock__sep"></span>
 

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Monitoring — ApotekMonitor{% endblock %}
+{% block content %}
+<section class="page">
+  <div class="page__head">
+    <div>
+      <h1 class="page__title"><i class="fa-solid fa-chart-line"></i> Monitoring</h1>
+      <p class="page__sub">Endpoints, logs, dan alerts dalam satu tampilan.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card__header" style="border-bottom:none;padding-bottom:0">
+      <div class="tabs" style="display:flex;gap:1rem;border-bottom:1px solid var(--border-color);width:100%">
+        <button class="tab-btn active" data-tab="endpoints" style="padding:.75rem 1rem;background:none;border:none;border-bottom:2px solid var(--neon-cyan);color:var(--neon-cyan);cursor:pointer">
+          <i class="fa-solid fa-plug"></i> Endpoints
+        </button>
+        <button class="tab-btn" data-tab="logs" style="padding:.75rem 1rem;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-secondary);cursor:pointer">
+          <i class="fa-solid fa-list"></i> Request Logs
+        </button>
+        <button class="tab-btn" data-tab="alerts" style="padding:.75rem 1rem;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-secondary);cursor:pointer">
+          <i class="fa-solid fa-bell"></i> Alerts <span class="badge" id="alertCount">0</span>
+        </button>
+      </div>
+    </div>
+    <div class="card__body" style="padding:1rem">
+      <!-- Endpoints Tab -->
+      <div class="tab-content active" data-tab="endpoints">
+        <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
+          <input type="text" id="epSearch" class="form-control form-control--sm" placeholder="🔍 Cari path / nama…" style="width:200px">
+          <select id="epModuleFilter" class="form-control form-control--sm" style="width:auto">
+            <option value="">Semua Module</option>
+          </select>
+        </div>
+        <div class="table-wrapper">
+          <table class="table table--compact">
+            <thead><tr><th>#</th><th>Nama</th><th>Method</th><th>Path</th><th>Module</th><th>Total</th><th>Success</th><th>Fail</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody id="epTbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="epPager" style="margin-top:.75rem;display:flex;justify-content:space-between;align-items:center">
+          <span class="page-info" id="epInfo"></span>
+          <div class="page-actions" style="display:flex;gap:.5rem;align-items:center">
+            <span style="font-size:.8rem;opacity:.7">Rows:</span>
+            <select id="epPageSize" class="form-control form-control--sm" style="width:auto">
+              <option value="10" selected>10</option><option value="25">25</option><option value="50">50</option>
+            </select>
+            <button class="btn btn-outline btn-sm" id="epPrev">‹ Prev</button>
+            <button class="btn btn-outline btn-sm" id="epNext">Next ›</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs Tab -->
+      <div class="tab-content" data-tab="logs" style="display:none">
+        <div style="display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap">
+          <select id="logStatus" class="form-control form-control--sm" style="width:auto">
+            <option value="">Semua Status</option>
+            <option value="success">Success</option>
+            <option value="fail">Fail</option>
+            <option value="error">Error</option>
+          </select>
+          <select id="logMethod" class="form-control form-control--sm" style="width:auto">
+            <option value="">Semua Method</option>
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+          <input type="text" id="logSearch" class="form-control form-control--sm" placeholder="Cari path..." style="width:200px">
+        </div>
+        <div class="table-wrapper">
+          <table class="table table--compact">
+            <thead><tr><th>Waktu</th><th>Method</th><th>Path</th><th>Code</th><th>Status</th><th>Latency</th><th>Retry</th></tr></thead>
+            <tbody id="logTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Alerts Tab -->
+      <div class="tab-content" data-tab="alerts" style="display:none">
+        <div class="table-wrapper">
+          <table class="table table--compact">
+            <thead><tr><th>Level</th><th>Title</th><th>Message</th><th>Source</th><th>Waktu</th></tr></thead>
+            <tbody id="alertTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<div class="toast-container" id="toastContainer" style="position:fixed;bottom:24px;right:24px;z-index:300"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.borderBottom = '2px solid transparent';
+        b.style.color = 'var(--text-secondary)';
+      });
+      document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      btn.classList.add('active');
+      btn.style.borderBottom = '2px solid var(--neon-cyan)';
+      btn.style.color = 'var(--neon-cyan)';
+      document.querySelector(`.tab-content[data-tab="${btn.dataset.tab}"]`).style.display = 'block';
+    });
+  });
+
+  // Load alerts count
+  fetch('/api/alerts/json/').then(r=>r.json()).then(d=>{
+    document.getElementById('alertCount').textContent = d.unread || 0;
+    document.getElementById('alertTbody').innerHTML = (d.alerts||[]).map(a=>`
+      <tr><td><span class="badge badge--${a.level}">${a.level}</span></td><td>${a.title}</td><td>${a.message||''}</td><td>${a.source}</td><td>${new Date(a.created_at).toLocaleString()}</td></tr>
+    `).join('') || '<tr><td colspan="5" style="text-align:center;opacity:.5">Tidak ada alert</td></tr>';
+  });
+})();
+</script>
+<style>
+.tabs .tab-btn.active { font-weight: 600; }
+.badge { padding:.15rem .4rem; border-radius:4px; font-size:.7rem; }
+.badge--critical { background:rgba(255,59,48,0.2); color:#ff3b30; }
+.badge--warning { background:rgba(255,214,10,0.2); color:#ffd60a; }
+.badge--info { background:rgba(0,122,255,0.2); color:#007aff; }
+.badge--success { background:rgba(52,199,89,0.2); color:#34c759; }
+</style>
+{% endblock %}

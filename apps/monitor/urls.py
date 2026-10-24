@@ -6,6 +6,7 @@ urlpatterns = [
     path("endpoints/", views.endpoint_list, name="endpoint_list"),
     path("endpoints/<int:pk>/", views.endpoint_detail, name="endpoint_detail"),
     path("logs/", views.log_list, name="log_list"),
+    path("monitoring/", views.endpoint_list, name="monitoring"),
     path("webhooks/", views.webhook_list, name="webhook_list"),
     path("api/webhook-events/", views.api_webhook_events, name="api_webhook_events"),
 
