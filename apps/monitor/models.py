@@ -279,8 +279,12 @@ class AIConfig(models.Model):
         return f"AIConfig(enabled={self.enabled}, model={self.model or '-'})"
 
     def save(self, *args, **kwargs):
-        if self.api_key:
-            self.api_key = encrypt_secret(self.api_key)
+        if self.api_key and isinstance(self.api_key, str) and self.api_key.strip():
+            if not self.api_key.startswith('enc:'):
+                try:
+                    self.api_key = encrypt_secret(self.api_key)
+                except Exception:
+                    pass
         super().save(*args, **kwargs)
 
     @classmethod
@@ -295,7 +299,7 @@ class AIConfig(models.Model):
         return decrypt_secret(self.api_key)
 
     def mask_key(self):
-        return mask_secret(self.api_key, leading=6, trailing=4)
+        return mask_secret(self.api_key)
 
 
 class ConnectionConfig(models.Model):
@@ -352,8 +356,14 @@ class ConnectionConfig(models.Model):
             "ai_api_key",
         ):
             value = getattr(self, field_name)
-            if value:
-                setattr(self, field_name, encrypt_secret(value))
+            if value and isinstance(value, str) and value.strip():
+                # Don't re-encrypt if it looks encrypted
+                if not value.startswith('enc:'):
+                    try:
+                        encrypted = encrypt_secret(value)
+                        setattr(self, field_name, encrypted)
+                    except Exception:
+                        pass
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -398,7 +408,7 @@ class ConnectionConfig(models.Model):
         return mask_secret(parsed.password) if parsed.password else ""
 
     def mask_ai_key(self):
-        return mask_secret(self.ai_api_key, leading=6, trailing=4)
+        return mask_secret(self.ai_api_key)
 
 
 class AIChatLog(models.Model):

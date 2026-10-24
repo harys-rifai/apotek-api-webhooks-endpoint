@@ -12,13 +12,28 @@ def decrypt_secret(secret: str) -> str:
     Returns:
         Decrypted secret string
     """
+    if secret is None:
+        return ""
+    if not isinstance(secret, str):
+        try:
+            secret = str(secret)
+        except Exception:
+            return ""
     # Simple XOR-based decryption (placeholder - replace with actual crypto)
-    key = b"secret_key_123"
     try:
-        return base64.b64decode(secret).decode("utf-8", errors="replace")
+        key = b"secret_key_123"
+        decoded = base64.b64decode(secret)
+        decrypted = []
+        for i, byte in enumerate(decoded):
+            decrypted.append(chr(byte ^ key[i % len(key)]))
+        return ''.join(decrypted)
     except Exception:
-        # Return as-is if not base64-encrypted (e.g. plaintext redis:// URL)
-        return secret
+        try:
+            # Try simple base64 decode as fallback
+            return base64.b64decode(secret).decode("utf-8", errors="replace")
+        except Exception:
+            # Return as-is if not encrypted
+            return secret
 
 
 def encrypt_secret(data: str, key: str = "secret_key_123") -> str:
@@ -31,15 +46,29 @@ def encrypt_secret(data: str, key: str = "secret_key_123") -> str:
     Returns:
         Encrypted data as base64 string
     """
-    # Simple XOR-based encryption (placeholder - replace with actual crypto)
-    key_bytes = key.encode()
-    encrypted = []
-    for i, char in enumerate(data):
-        encrypted.append(char ^ key_bytes[i % len(key_bytes)])
-    return base64.b64encode(bytes(encrypted)).decode("utf-8")
+    if data is None:
+        return ""
+    # Ensure data is string
+    if not isinstance(data, str):
+        try:
+            data = str(data)
+        except Exception:
+            return ""
+    try:
+        key_bytes = key.encode()
+        encrypted = []
+        for i, char in enumerate(data):
+            encrypted.append(ord(char) ^ key_bytes[i % len(key_bytes)])
+        return base64.b64encode(bytes(encrypted)).decode("utf-8")
+    except Exception:
+        # Fallback to base64 if XOR fails
+        try:
+            return base64.b64encode(data.encode('utf-8')).decode('utf-8')
+        except Exception:
+            return ""
 
 
-def mask_secret(secret: str) -> str:
+def mask_secret(secret: str, leading: int = 0, trailing: int = 0) -> str:
     """Mask a secret by replacing parts with asterisks.
     
     Args:
@@ -50,6 +79,11 @@ def mask_secret(secret: str) -> str:
     """
     if not secret:
         return ""
+    secret = str(secret)
+    if leading or trailing:
+        if len(secret) <= leading + trailing:
+            return "*" * len(secret)
+        return secret[:leading] + "*" * max(4, len(secret) - leading - trailing) + secret[-trailing:] if trailing else secret[:leading] + "*" * (len(secret) - leading)
     # Mask every 4th character
     result = []
     for i, char in enumerate(secret):

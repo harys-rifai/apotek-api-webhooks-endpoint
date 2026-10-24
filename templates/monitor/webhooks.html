@@ -7,18 +7,40 @@
   <div class="page__head">
     <div>
       <h1 class="page__title"><i class="fa-solid fa-wave-square"></i> Realtime Activity</h1>
-      <p class="page__sub">Sesi dan query yang sedang berjalan pada kedua instance PostgreSQL,via <code>pg_stat_activity</code>.</p>
+      <p class="page__sub">Sesi dan query yang sedang berjalan pada kedua instance PostgreSQL, via <code>pg_stat_activity</code> · Live webhook events</p>
     </div>
     <div class="page__actions">
       <label class="checkbox"><input type="checkbox" id="autoRefresh" checked> Auto-refresh</label>
       <select class="select-sm" id="intervalSel" style="width:auto">
+        <option value="1">1s</option>
+        <option value="2">2s</option>
         <option value="3">3s</option>
+        <option value="4">4s</option>
         <option value="5" selected>5s</option>
         <option value="10">10s</option>
-        <option value="30">30s</option>
+        <option value="20">20s</option>
       </select>
       <button type="button" class="btn btn-outline btn-sm" id="refreshBtn"><i class="fa-solid fa-rotate"></i> Refresh</button>
       <span id="updated" style="opacity:.6;font-size:.78rem"></span>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="card__header">
+      <h2 class="card__title"><i class="fa-solid fa-satellite-dish" style="color:var(--neon-green)"></i> Realtime Webhooks</h2>
+      <div class="card__header-right">
+        <span class="status-badge status-badge--ok" id="whBadge">LIVE</span>
+      </div>
+    </div>
+    <div class="card__body" style="padding:0">
+      <div class="table-wrapper" style="max-height:320px;overflow-y:auto;">
+        <table class="table table--compact">
+          <thead>
+            <tr><th>Waktu</th><th>Event Type</th><th>Source IP</th><th>Status</th><th>Processed At</th><th>Error</th></tr>
+          </thead>
+          <tbody id="whBody"><tr><td colspan="6" class="pg-empty">Memuat…</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -71,6 +93,7 @@
 {% block extra_js %}
 <script>
 const ACTIVITY_URL = '{% url "api_pg_activity" %}';
+const WEBHOOK_URL = '{% url "api_webhook_events" %}';
 
 const STATE_DOT = {
   active: 'status-dot--processed',
@@ -79,12 +102,35 @@ const STATE_DOT = {
   'idle in transaction (aborted)': 'status-dot--failed',
 };
 
-function fmtDuration(s) {
-  if (s === null || s === undefined) return '—';
-  s = Number(s);
-  if (s < 60) return s + 's';
-  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
-  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+function fmtTime(ts) {
+  if (!ts) return '—';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString();
+  } catch(e) {
+    return ts;
+  }
+}
+
+function renderWebhooks(events) {
+  const body = document.getElementById('whBody');
+  if (!events || !events.length) {
+    body.innerHTML = '<tr><td colspan="6" class="pg-empty">Belum ada webhook event.</td></tr>';
+    return;
+  }
+  body.innerHTML = events.map(ev => {
+    let statusCls = 'status-badge--received';
+    if (ev.status === 'processed') statusCls = 'status-badge--processed';
+    else if (ev.status === 'failed') statusCls = 'status-badge--err';
+    return '<tr>'
+      + '<td class="text-sm">' + esc(fmtTime(ev.received_at)) + '</td>'
+      + '<td class="text-sm">' + esc(ev.event_type) + '</td>'
+      + '<td class="text-mono text-sm">' + esc(ev.source_ip || '—') + '</td>'
+      + '<td class="text-sm"><span class="status-badge ' + statusCls + '">' + esc(ev.status) + '</span></td>'
+      + '<td class="text-sm">' + esc(fmtTime(ev.processed_at)) + '</td>'
+      + '<td class="text-sm" title="' + esc(ev.error_message || '') + '">' + (esc(ev.error_message) ? esc(ev.error_message).substring(0, 60) : '—') + '</td>'
+      + '</tr>';
+  }).join('');
 }
 
 function esc(str) {
@@ -148,12 +194,19 @@ async function refresh() {
   const refreshBtn = document.getElementById('refreshBtn');
   if (refreshBtn) refreshBtn.disabled = true;
   try {
-    const res = await fetch(ACTIVITY_URL, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const [pgRes, whRes] = await Promise.all([
+      fetch(ACTIVITY_URL, { headers: { 'Accept': 'application/json' } }),
+      fetch(WEBHOOK_URL + '?limit=50', { headers: { 'Accept': 'application/json' } })
+    ]);
+    if (!pgRes.ok) throw new Error('HTTP ' + pgRes.status);
+    const data = await pgRes.json();
     document.querySelectorAll('.pg-grid .card').forEach(card => {
       renderCard(card, data[card.dataset.side]);
     });
+    if (whRes.ok) {
+      const whData = await whRes.json();
+      renderWebhooks(whData.events || []);
+    }
     document.getElementById('updated').textContent =
       'Diperbarui ' + new Date().toLocaleTimeString();
   } catch (e) {

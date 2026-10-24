@@ -242,6 +242,26 @@ def webhook_list(request):
 
 
 @login_required
+def api_webhook_events(request):
+    """Realtime webhook events from WebhookEvent table."""
+    from .models import WebhookEvent
+    limit = int(request.GET.get('limit', 50))
+    qs = WebhookEvent.objects.order_by('-received_at')[:limit]
+    events = []
+    for ev in qs:
+        events.append({
+            'id': ev.id,
+            'event_type': ev.event_type,
+            'status': ev.status,
+            'source_ip': ev.source_ip,
+            'received_at': ev.received_at.isoformat() if ev.received_at else None,
+            'processed_at': ev.processed_at.isoformat() if ev.processed_at else None,
+            'error_message': ev.error_message,
+        })
+    return JsonResponse({'ok': True, 'events': events})
+
+
+@login_required
 def delivery_list(request):
     """Pantau pengantaran obat dari ApotekApps (/deliveries/)."""
     deliveries = []
