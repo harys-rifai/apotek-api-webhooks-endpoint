@@ -256,7 +256,7 @@ def api_webhook_events(request):
             'source_ip': ev.source_ip,
             'received_at': ev.received_at.isoformat() if ev.received_at else None,
             'processed_at': ev.processed_at.isoformat() if ev.processed_at else None,
-            'error_message': ev.error_message,
+            'error_message': ev.error_message or '',
         })
     return JsonResponse({'ok': True, 'events': events})
 
@@ -827,7 +827,7 @@ SELECT pid,
        EXTRACT(EPOCH FROM (now() - state_change))::int AS state_age_s,
        left(regexp_replace(query, '\s+', ' ', 'g'), 200) AS query
 FROM pg_stat_activity
-WHERE datname = %s AND pid <> pg_backend_pid()
+WHERE datname = %s
 ORDER BY COALESCE(query_start, backend_start) DESC
 """
 
